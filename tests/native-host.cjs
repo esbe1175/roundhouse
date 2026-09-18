@@ -29,6 +29,11 @@ app.whenReady().then(async () => {
     host.bounds(20, 30, 640, 360, true, 0, 0);
     assert.equal(host.geometry().top, 0);
     assert.equal(host.geometry().bottom, fullGeometry.height);
+    host.bounds(20, 30, 640, 360, true, 40, 48, 0.2, 0, 0.8, 1);
+    assert.equal(host.geometry().left, Math.floor(fullGeometry.width * 0.2));
+    assert.equal(host.geometry().right, Math.floor(fullGeometry.width * 0.8));
+    assert.equal(host.geometry().width, fullGeometry.width);
+    host.bounds(20, 30, 640, 360, true, 0, 0);
     const pipe = `\\\\.\\pipe\\roundhouse-test-${process.pid}`;
     child = spawn(
       path.resolve("resources/mpv/mpv.exe"),
@@ -41,6 +46,7 @@ app.whenReady().then(async () => {
         "--no-terminal",
         "--osc=no",
         "--input-cursor-passthrough=yes",
+        `--script=${path.resolve("resources/player/ambient.lua")}`,
       ],
       { windowsHide: true, stdio: "ignore" },
     );
@@ -55,9 +61,9 @@ app.whenReady().then(async () => {
         }
       };
     });
-    await ipc.command(["loadfile", "av://lavfi:testsrc=size=640x360:rate=30", "replace"]);
+    await ipc.command(["loadfile", "av://lavfi:testsrc=size=1920x1080:rate=30", "replace"]);
     await loaded;
-    assert.equal(await ipc.command(["get_property", "width"]), 640);
+    assert.equal(await ipc.command(["get_property", "width"]), 1920);
     await ipc.command(["set_property", "pause", true]);
     assert.equal(await ipc.command(["get_property", "pause"]), true);
     await ipc.command(["set_property", "volume", 37]);
@@ -77,6 +83,19 @@ app.whenReady().then(async () => {
     const screenshot = path.resolve(`.cache/mpv-test-${process.env.ROUNDHOUSE_TEST_SCALE || "1"}.png`);
     await ipc.command(["screenshot-to-file", screenshot, "video"]);
     assert.ok(fs.statSync(screenshot).size > 1000);
+    await ipc.command(["script-message", "roundhouse-ambient-sample"]);
+    let ambient;
+    for (let attempt = 0; attempt < 30; attempt++) {
+      ambient = await ipc.command(["get_property", "user-data/roundhouse/ambient"]).catch(() => null);
+      if (ambient?.colors) break;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    assert.equal(ambient?.colors.length, 24);
+    assert.ok(ambient.colors.some(([r, g, b]) => r !== g || g !== b));
+    assert.ok(JSON.stringify(ambient).length < 1024);
+    console.log(
+      `1080p ambient frame readback + sampling: ${ambient.sampleMs.toFixed(2)}ms, ${JSON.stringify(ambient).length} bytes over IPC`,
+    );
     console.log(
       `PASS: native HWND embedding, overlay regions without video resize, resize, visibility, MPV video frame, pause, volume, mute; display scale ${process.env.ROUNDHOUSE_TEST_SCALE || "1"}`,
     );

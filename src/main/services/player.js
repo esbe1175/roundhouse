@@ -6,6 +6,8 @@ import { MpvIPC } from "./mpv-ipc.mjs";
 import { parseQualities } from "./channels.mjs";
 import store from "../../../utils/config";
 import { latencyOptions } from "./playback-options.mjs";
+import { LowLatencyStream } from "./low-latency.mjs";
+import { GLOW_DEFAULTS } from "../../../utils/glow-settings.mjs";
 
 export class Player {
   constructor(account) {
@@ -18,6 +20,9 @@ export class Player {
       qualities: [],
       quality: "auto",
       lowLatency: store.get("lowLatency"),
+      ambientGlow: store.get("ambientGlow"),
+      ambientIntensity: store.get("ambientIntensity"),
+      ambientFalloff: store.get("ambientFalloff"),
     };
     this.generation = 0;
   }
@@ -59,6 +64,63 @@ export class Player {
         this.emit({ hoverTop, hoverBottom, hoverDivider });
     }, 100);
     this.window.once("closed", () => clearInterval(this.hoverTimer));
+    this.ambientTimer = setInterval(() => this.sampleAmbient(), 3000);
+    this.window.once("closed", () => clearInterval(this.ambientTimer));
+  }
+  sampleAmbient() {
+    const dims = this.videoDimensions;
+    if (
+      this.sampling ||
+      !this.ipc ||
+      !this.state.ambientGlow ||
+      this.state.ambientIntensity === 0 ||
+      this.state.pause ||
+      this.state.status !== "playing" ||
+      !this.window?.isVisible() ||
+      this.window.isMinimized() ||
+      !this.rect?.visible ||
+      !dims ||
+      dims.ml + dims.mr + dims.mt + dims.mb < 4
+    )
+      return;
+    const ipc = this.ipc;
+    this.sampling = true;
+    void ipc
+      .command(["script-message", "roundhouse-ambient-sample"])
+      .catch(() => {})
+      .finally(() => {
+        this.sampling = false;
+      });
+  }
+  async mediaURL(url) {
+    this.transport?.close();
+    this.transport = null;
+    this.emit({ transport: "hls" });
+    if (!this.state.lowLatency) return url;
+    const generation = this.generation;
+    const transport = new LowLatencyStream({
+      onFailure: (error) => {
+        if (generation === this.generation && this.transport === transport) this.emit({ status: "error", error });
+      },
+    });
+    this.transport = transport;
+    try {
+      const local = await transport.start(url);
+      if (generation !== this.generation || this.transport !== transport) throw new Error("Playback changed.");
+      if (local) {
+        this.emit({ transport: "prefetch" });
+        return local;
+      }
+    } catch (error) {
+      if (generation !== this.generation || this.transport !== transport) {
+        transport.close();
+        throw error;
+      }
+      // Ordinary HLS remains playable when prefetch is absent/unsupported.
+    }
+    transport.close();
+    this.transport = null;
+    return url;
   }
   async open(slug, { quality = "auto", pause = false } = {}) {
     if (typeof slug !== "string" || !/^[a-zA-Z0-9_-]+$/.test(slug)) throw new Error("Invalid channel.");
@@ -73,6 +135,7 @@ export class Player {
       quality,
       pause,
       "paused-for-cache": false,
+      ambientColors: null,
       hoverTop: false,
       hoverBottom: false,
     });
@@ -118,6 +181,7 @@ export class Player {
           "--hwdec=auto-safe",
           "--keep-open=no",
           "--ytdl=no",
+          `--script=${join(base, app.isPackaged ? "player" : "resources/player", "ambient.lua")}`,
           ...latencyOptions(this.state.lowLatency),
         ],
         { windowsHide: true, stdio: "ignore" },
@@ -127,6 +191,8 @@ export class Player {
       });
       child.on("exit", () => {
         if (generation === this.generation) {
+          this.transport?.close();
+          this.transport = null;
           this.ipc?.close();
           this.host?.destroy();
           this.emit({ status: "error", error: "MPV closed. Retry playback." });
@@ -140,7 +206,10 @@ export class Player {
       }
       ipc.onEvent = (event) => {
         if (generation !== this.generation) return;
-        if (event.event === "file-loaded") this.emit({ status: "playing", error: null });
+        if (event.event === "file-loaded") {
+          this.emit({ status: "playing", error: null });
+          this.transport?.setPaused(this.state.pause);
+        }
         if (event.event === "end-file")
           this.emit({
             status: event.reason === "error" ? "error" : "ended",
@@ -149,16 +218,51 @@ export class Player {
           });
         if (event.event === "property-change" && ["pause", "volume", "mute", "paused-for-cache"].includes(event.name))
           this.emit({ [event.name]: event.data });
+        if (event.event === "property-change" && event.name === "osd-dimensions") {
+          this.videoDimensions = event.data;
+          const d = event.data;
+          if (d?.w > 0 && d?.h > 0)
+            this.emit({
+              videoFrame: { left: d.ml / d.w, top: d.mt / d.h, right: 1 - d.mr / d.w, bottom: 1 - d.mb / d.h },
+            });
+          this.setBounds(this.rect);
+        }
+        if (event.event === "property-change" && event.name === "user-data/roundhouse/ambient") {
+          const colors = event.data?.colors;
+          if (
+            this.state.ambientGlow &&
+            Array.isArray(colors) &&
+            colors.length === 24 &&
+            colors.every(
+              (color) =>
+                Array.isArray(color) &&
+                color.length === 3 &&
+                color.every((value) => Number.isInteger(value) && value >= 0 && value <= 255),
+            )
+          ) {
+            this.emit({ ambientColors: colors, ambientSampleMs: event.data.sampleMs });
+            this.setBounds(this.rect);
+          }
+        }
       };
       // Apply saved values before observing, so MPV's initial defaults cannot
       // overwrite them while a mode change is restarting the process.
       await ipc.command(["set_property", "volume", this.state.volume]);
       await ipc.command(["set_property", "mute", this.state.mute]);
       await ipc.command(["set_property", "pause", pause]);
-      for (const [index, property] of ["pause", "volume", "mute", "paused-for-cache"].entries())
+      for (const [index, property] of [
+        "pause",
+        "volume",
+        "mute",
+        "paused-for-cache",
+        "osd-dimensions",
+        "user-data/roundhouse/ambient",
+      ].entries())
         await ipc.command(["observe_property", index, property]);
       const variant = this.qualities.find((q) => q.id === quality);
-      await ipc.command(["loadfile", variant?.url || this.url, "replace"]);
+      const media = await this.mediaURL(variant?.url || this.qualities[0]?.url || this.url);
+      if (generation !== this.generation) return;
+      await ipc.command(["loadfile", this.state.lowLatency ? media : variant?.url || this.url, "replace"]);
       if (generation !== this.generation) return;
       this.emit({ quality: variant?.id || "auto", qualities: this.qualities.map(({ id, label }) => ({ id, label })) });
       this.setBounds(this.rect);
@@ -175,7 +279,7 @@ export class Player {
       throw new Error("Invalid player rectangle.");
     const top = rect.overlayTop ?? 0,
       bottom = rect.overlayBottom ?? 0;
-    if (![top, bottom].every((value) => Number.isFinite(value) && value >= 0 && value <= 256))
+    if (![top, bottom].every((value) => Number.isFinite(value) && value >= 0 && value <= 512))
       throw new Error("Invalid player overlay bounds.");
     if (
       !Number.isFinite(rect.titlebarHeight ?? 0) ||
@@ -188,6 +292,11 @@ export class Player {
     this.rect = rect;
     const zoom = this.window.webContents.getZoomFactor();
     const visible = !!rect.visible && !this.window.isMinimized();
+    const d = this.videoDimensions;
+    const clip =
+      this.state.ambientGlow && this.state.ambientColors && d?.w > 0 && d?.h > 0
+        ? [d.ml / d.w, d.mt / d.h, 1 - d.mr / d.w, 1 - d.mb / d.h]
+        : [0, 0, 1, 1];
     this.host?.bounds(
       rect.x * zoom,
       rect.y * zoom,
@@ -196,9 +305,31 @@ export class Player {
       visible,
       top * zoom,
       bottom * zoom,
+      ...clip,
     );
   }
   async control(action, value) {
+    if (action === "resetGlow") {
+      store.set({ ...GLOW_DEFAULTS });
+      this.emit({ ...GLOW_DEFAULTS });
+      this.setBounds(this.rect);
+      this.sampleAmbient();
+      return;
+    }
+    if (["ambientIntensity", "ambientFalloff"].includes(action)) {
+      if (!Number.isFinite(value) || value < 0 || value > 100) throw new Error("Invalid ambient setting.");
+      store.set(action, value);
+      this.emit({ [action]: value });
+      return;
+    }
+    if (action === "ambientGlow") {
+      if (typeof value !== "boolean") throw new Error("Invalid ambient glow setting.");
+      store.set("ambientGlow", value);
+      this.emit({ ambientGlow: value, ...(!value ? { ambientColors: null } : {}) });
+      this.setBounds(this.rect);
+      this.sampleAmbient();
+      return;
+    }
     if (action === "lowLatency") {
       if (typeof value !== "boolean") throw new Error("Invalid low latency setting.");
       if (value === this.state.lowLatency) return;
@@ -214,6 +345,8 @@ export class Player {
     if (!this.ipc) throw new Error("No active stream.");
     switch (action) {
       case "pause":
+        if (this.transport && this.state.pause) return this.open(this.slug, { quality: this.state.quality });
+        this.transport?.setPaused(true);
         return this.ipc.command(["cycle", "pause"]);
       case "mute":
         return this.ipc.command(["cycle", "mute"]);
@@ -223,7 +356,12 @@ export class Player {
       case "quality": {
         const target = value === "auto" ? this.url : this.qualities.find((q) => q.id === value)?.url;
         if (!target) throw new Error("Invalid quality.");
-        await this.ipc.command(["loadfile", target, "replace"]);
+        const ipc = this.ipc;
+        const media = await this.mediaURL(
+          this.state.lowLatency && value === "auto" ? this.qualities[0]?.url || target : target,
+        );
+        if (ipc !== this.ipc) return;
+        await ipc.command(["loadfile", media, "replace"]);
         this.emit({ quality: value });
         return;
       }
@@ -236,6 +374,9 @@ export class Player {
     const child = this.child,
       ipc = this.ipc,
       host = this.host;
+    this.transport?.close();
+    this.transport = null;
+    this.videoDimensions = null;
     this.child = null;
     this.ipc = null;
     this.host = null;

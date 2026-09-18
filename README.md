@@ -55,7 +55,19 @@ Pins sit directly below the chat tabs. Hover previews stay inside the chat pane,
 
 Hover the bottom of the video and toggle **Low latency**. Green means enabled. The preference is saved across streams and app restarts; changing it reloads video while preserving quality, volume, mute and pause, without reconnecting chat. It starts disabled. Turn it off if your connection struggles to keep up, and use **Live** to return to the live edge after pausing.
 
-The toggle uses [MPV's low-latency profile](https://mpv.io/manual/master/#low-latency-playback), one second of read-ahead and [FFmpeg's HLS `live_start_index=-1`](https://ffmpeg.org/ffmpeg-formats.html#hls) to start at the newest complete segment instead of three segments back. Media still goes directly to MPV; the named pipe carries controls. This reduces player-side delay but does not guarantee a specific end-to-end latency or eliminate Kick's encoding/CDN delay. The loopback HLS test verifies a four-second improvement with two-second segments; it is not a measurement of Kick's live service.
+Kick's IVS playlists advertise unfinished segments using `EXT-X-PREFETCH`. Regular FFmpeg HLS playback ignores these, even with small buffers. When available, Roundhouse streams those segment bytes immediately through a private, single-client loopback connection to MPV, using [MPV's low-latency profile](https://mpv.io/manual/master/#low-latency-playback). The control named pipe remains separate. Resuming from pause in this mode returns to live. Auto quality uses the highest advertised variant; choose a lower quality if the connection struggles. Turning the toggle off restores ordinary HLS playback.
+
+The transport falls back to ordinary HLS if the playlist does not support this prefetch format. The fallback starts at the newest completed segment. No account cookies are passed to the media CDN or local transport. Kick's [public API](https://docs.kick.com/apis/livestreams) does not provide a separate low-latency viewer URL; the account-resolved playback URL remains the source. Streamlink's [Kick integration](https://github.com/streamlink/streamlink/blob/master/src/streamlink/plugins/kick.py) was a useful protocol reference.
+
+A live comparison on September 18, 2026 measured the prefetch route approximately **2.47 seconds ahead** of the previous MPV route on the same Odablock rendition. This is an improvement over our old playback path, not a measurement against Kick's web player or a promise of a specific end-to-end delay. Kick's encoding, CDN and the network still matter.
+
+### Ambient glow and Roundhouse settings
+
+The **Roundhouse settings** gear in the video controls (or overview title bar) is separate from Chat settings. Ambient glow starts enabled and fills the video's black bars with soft stream colors. **Intensity** adjusts brightness; **Distance falloff** fades the glow away from the actual video edges. Higher values keep it closer to the picture; zero is **Unfaded**. Changes save automatically. **Reset to defaults** restores all three glow settings in one click without changing chat or playback preferences.
+
+Current defaults are enabled, 50% intensity and 35% falloff. First-run settings and reset both read [utils/glow-settings.mjs](utils/glow-settings.mjs), so release defaults can be tuned in one place.
+
+MPV samples a 6×4 color palette every three seconds; only 24 RGB colors cross IPC. Chromium blurs a 96×64 canvas once per sample and scales it behind the video. No second video decoder, image files, continuous canvas loop or full-resolution image transfer is used. Sampling stops while paused, minimized, hidden, disabled, at zero intensity, or when there are no black bars. The native video rectangle retains its dimensions; its black bars are clipped to reveal the glow.
 
 ## Development (PowerShell)
 
@@ -153,6 +165,7 @@ Thank you to:
 
 - **Dark, ftk789 and the KickTalk contributors** for the application, design language and full chat experience.
 - **The mpv/MPlayer/mplayer2 contributors and shinchiro** for the player and Windows distribution, and **FFmpeg/libplacebo contributors** for media and rendering work.
+- **Streamlink contributors** for documenting Kick/IVS prefetch behavior in their open-source player integration.
 - **Electron, Chromium, React, Lexical, Radix/WorkOS**, and the maintainers of our other npm dependencies for the application platform and controls.
 - **The Inter Project Authors and Phosphor Icons** for typography and icons inherited through KickTalk.
 - **Kick and 7TV** for the platform, community emotes and cosmetics. Roundhouse is an independent project and is not endorsed by these services.

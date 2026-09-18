@@ -1,7 +1,11 @@
 import Store from "electron-store";
 import { DEFAULTS as FILTER_DEFAULTS } from "./chat-filters.mjs";
+import { GLOW_DEFAULTS } from "./glow-settings.mjs";
 
 const schema = {
+  ambientGlow: { type: "boolean", default: GLOW_DEFAULTS.ambientGlow },
+  ambientIntensity: { type: "number", minimum: 0, maximum: 100, default: GLOW_DEFAULTS.ambientIntensity },
+  ambientFalloff: { type: "number", minimum: 0, maximum: 100, default: GLOW_DEFAULTS.ambientFalloff },
   lowLatency: { type: "boolean", default: false },
   chatFilters: { type: "object", default: FILTER_DEFAULTS },
   kickId: {

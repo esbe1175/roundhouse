@@ -24,6 +24,10 @@ MPV's [copyright statement](resources/licenses/mpv-Copyright.txt) describes its 
 
 The downloaded archive includes documentation and support files but no standalone license files. Roundhouse supplies the tracked upstream texts alongside it. These texts are not a complete inventory of every library statically linked by the distributor. When publishing binary releases, provide the applicable corresponding source and dependency notices for those exact binaries; a link to a moving branch is not a substitute for corresponding source.
 
+## Protocol research acknowledgement
+
+Thanks to the [Streamlink contributors](https://github.com/streamlink/streamlink) for their [Kick plugin](https://github.com/streamlink/streamlink/blob/master/src/streamlink/plugins/kick.py), used as a reference for IVS `EXT-X-PREFETCH` behavior. Roundhouse's Node transport is independently implemented; Streamlink code and binaries are not included or required.
+
 ## Electron, Chromium and npm packages
 
 Thanks to the **Electron and Chromium projects**, **Meta and the React/Lexical contributors**, **WorkOS/Radix**, and the maintainers of the other packages listed in [package.json](package.json) and [package-lock.json](package-lock.json).

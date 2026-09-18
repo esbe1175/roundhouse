@@ -385,6 +385,62 @@ const assert = require("node:assert/strict");
     await page.keyboard.press("Enter");
     assert.equal(await app.evaluate(() => global.roundhouseTestMessages.length), 1);
     await require("./chat-ui.cjs")({ app, page, errors });
+    // Roundhouse owns its playback settings; chat settings remain separate.
+    await expect(page.locator(".rh-ambient")).toBeVisible({ timeout: 10000 });
+    await hoverEdge("bottom");
+    await page.getByRole("button", { name: "Roundhouse settings", exact: true }).click();
+    const ambientSetting = page.getByRole("menuitemcheckbox", { name: "Ambient glow", exact: true });
+    await expect(ambientSetting).toBeChecked();
+    await ambientSetting.click();
+    await expect(ambientSetting).not.toBeChecked();
+    await expect(page.locator(".rh-ambient")).toHaveCount(0);
+    assert.equal(await page.evaluate(async () => (await window.app.store.get()).ambientGlow), false);
+    await ambientSetting.click();
+    await expect(ambientSetting).toBeChecked();
+    await expect(page.locator(".rh-ambient")).toBeVisible({ timeout: 10000 });
+    const intensity = page.getByRole("slider", { name: "Intensity", exact: true });
+    const falloff = page.getByRole("slider", { name: "Distance falloff", exact: true });
+    await intensity.focus();
+    await page.keyboard.press("End");
+    await expect(intensity).toHaveAttribute("aria-valuenow", "100");
+    await expect(page.locator(".rh-ambient")).toHaveCSS("opacity", "1");
+    await falloff.focus();
+    await page.keyboard.press("Home");
+    await expect(falloff).toHaveAttribute("aria-valuenow", "0");
+    await expect(page.locator(".rh-ambient")).toHaveCSS("mask-image", "none");
+    assert.equal(await page.evaluate(async () => (await window.app.store.get()).ambientFalloff), 0);
+    await ambientSetting.click();
+    await expect(intensity).toHaveAttribute("data-disabled", "");
+    await page.getByRole("menuitem", { name: "Reset to defaults", exact: true }).click();
+    const { GLOW_DEFAULTS } = await import("../utils/glow-settings.mjs");
+    await expect(ambientSetting).toBeChecked();
+    await expect(intensity).toHaveAttribute("aria-valuenow", String(GLOW_DEFAULTS.ambientIntensity));
+    await expect(falloff).toHaveAttribute("aria-valuenow", String(GLOW_DEFAULTS.ambientFalloff));
+    await expect(page.locator(".rh-ambient")).toBeVisible({ timeout: 10000 });
+    assert.notEqual(await page.locator(".rh-ambient").evaluate((el) => getComputedStyle(el).maskImage), "none");
+    const glowStore = await page.evaluate(() => window.app.store.get());
+    for (const [key, value] of Object.entries(GLOW_DEFAULTS)) assert.equal(glowStore[key], value);
+    const invalidGlow = await page.evaluate(async () => {
+      const messages = [];
+      for (const [key, value] of [
+        ["ambientIntensity", -1],
+        ["ambientFalloff", 101],
+        ["ambientIntensity", "50"],
+        ["ambientGlow", "yes"],
+      ]) {
+        try {
+          await window.app.roundhouse.control(key, value);
+          messages.push("accepted");
+        } catch (error) {
+          messages.push(error.message);
+        }
+      }
+      return messages;
+    });
+    assert.ok(invalidGlow.every((message) => /Invalid ambient/.test(message)));
+    await page.screenshot({ path: ".cache/ambient-settings.png" });
+    await page.keyboard.press("Escape");
+    assert.equal(await page.evaluate(async () => (await window.app.store.get()).ambientGlow), true);
     // Background-window hover must expose both bars before any activating click.
     await app.evaluate(() => {
       global.roundhouseTestFocused = false;

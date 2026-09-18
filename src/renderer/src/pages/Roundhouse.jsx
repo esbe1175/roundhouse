@@ -12,6 +12,9 @@ import User from "../assets/icons/user-fill.svg?asset";
 import Play from "../assets/icons/play-fill.svg?asset";
 import CaretDown from "../assets/icons/caret-down-fill.svg?asset";
 import PlaybackIcon from "../components/PlaybackIcon";
+import AmbientGlow from "../components/AmbientGlow";
+import RoundhouseSettings from "../components/RoundhouseSettings";
+import { GLOW_DEFAULTS } from "../../../../utils/glow-settings.mjs";
 import { Slider } from "../components/Shared/Slider";
 import { Switch } from "../components/Shared/Switch";
 import {
@@ -94,6 +97,8 @@ export default function Roundhouse() {
   const [topFocus, setTopFocus] = useState(false),
     [bottomFocus, setBottomFocus] = useState(false);
   const [qualityOpen, setQualityOpen] = useState(false);
+  const [appSettingsOpen, setAppSettingsOpen] = useState(false);
+  const [surfaceSize, setSurfaceSize] = useState({ width: 0, height: 0 });
   const [bottomPressed, setBottomPressed] = useState(false);
   const [draggingDivider, setDraggingDivider] = useState(false);
   const [chatTools, setChatTools] = useState(null);
@@ -108,7 +113,7 @@ export default function Roundhouse() {
   const topBar = useRef(null),
     bottomBar = useRef(null);
   const topShown = !!player.hoverTop || topFocus,
-    bottomShown = !!player.hoverBottom || bottomFocus || qualityOpen || bottomPressed;
+    bottomShown = !!player.hoverBottom || bottomFocus || qualityOpen || appSettingsOpen || bottomPressed;
   useEffect(() => {
     let frame;
     // Keep the toolbar present through click dispatch, including a fast click
@@ -260,6 +265,15 @@ export default function Roundhouse() {
       setError(err.message);
     }
   };
+  const glowSettings = {
+    enabled: player.ambientGlow ?? settings.ambientGlow ?? GLOW_DEFAULTS.ambientGlow,
+    intensity: player.ambientIntensity ?? settings.ambientIntensity ?? GLOW_DEFAULTS.ambientIntensity,
+    falloff: player.ambientFalloff ?? settings.ambientFalloff ?? GLOW_DEFAULTS.ambientFalloff,
+    onChange: (enabled) => void control("ambientGlow", enabled),
+    onIntensity: (value) => void control("ambientIntensity", value),
+    onFalloff: (value) => void control("ambientFalloff", value),
+    onReset: () => void control("resetGlow"),
+  };
 
   useEffect(() => {
     if (!selected || !surface.current) return;
@@ -269,13 +283,22 @@ export default function Roundhouse() {
       raf = requestAnimationFrame(() => {
         const rect = surface.current?.getBoundingClientRect();
         if (!rect) return;
+        setSurfaceSize((previous) =>
+          previous.width === rect.width && previous.height === rect.height
+            ? previous
+            : { width: rect.width, height: rect.height },
+        );
         const overlays = [
           ...document.querySelectorAll('[role="dialog"], [role="menu"], [data-radix-popper-content-wrapper]'),
         ];
         const covered = overlays.some((el) => {
           // The quality menu uses the existing bottom video cutout, leaving
           // the rest of the native video visible while choosing a quality.
-          if (el.matches(".rh-quality-menu") || el.querySelector(".rh-quality-menu")) return false;
+          if (
+            el.matches(".rh-quality-menu, .rh-settings-menu") ||
+            el.querySelector(".rh-quality-menu, .rh-settings-menu")
+          )
+            return false;
           const r = el.getBoundingClientRect();
           return (
             r.width &&
@@ -286,7 +309,9 @@ export default function Roundhouse() {
             r.bottom > rect.top
           );
         });
-        const qualityMenu = document.querySelector('.rh-quality-menu[data-state="open"]')?.getBoundingClientRect();
+        const qualityMenu = document
+          .querySelector('.rh-quality-menu[data-state="open"], .rh-settings-menu[data-state="open"]')
+          ?.getBoundingClientRect();
         const bottomHeight = bottomShown ? bottomBar.current?.getBoundingClientRect().height || 0 : 0;
         void api
           .bounds({
@@ -296,7 +321,7 @@ export default function Roundhouse() {
             height: rect.height,
             visible: !covered && ["playing", "loading"].includes(player.status),
             overlayTop: topShown ? topBar.current?.getBoundingClientRect().height || 0 : 0,
-            overlayBottom: Math.min(256, Math.max(bottomHeight, qualityMenu ? rect.bottom - qualityMenu.top : 0)),
+            overlayBottom: Math.min(512, Math.max(bottomHeight, qualityMenu ? rect.bottom - qualityMenu.top : 0)),
             dividerWidth: videoFullscreen ? 0 : 7,
             titlebarHeight: document.querySelector(".rh-titlebar")?.getBoundingClientRect().height || 0,
           })
@@ -327,7 +352,7 @@ export default function Roundhouse() {
   useEffect(() => {
     const keys = (event) => {
       if (!selected || event.defaultPrevented) return;
-      if (event.key === "Escape" && fullscreen && !qualityOpen) {
+      if (event.key === "Escape" && fullscreen && !qualityOpen && !appSettingsOpen) {
         void api.fullscreen(false);
         return;
       }
@@ -342,7 +367,7 @@ export default function Roundhouse() {
     };
     window.addEventListener("keydown", keys);
     return () => window.removeEventListener("keydown", keys);
-  }, [selected, fullscreen, videoFullscreen, qualityOpen]);
+  }, [selected, fullscreen, videoFullscreen, qualityOpen, appSettingsOpen]);
   const resizeChat = (value) => {
     const next = Math.max(280, Math.min(value, window.innerWidth - 480));
     setWidth(next);
@@ -367,6 +392,7 @@ export default function Roundhouse() {
                 {account.profile_pic && <img className="rh-account-avatar" src={account.profile_pic} alt="" />}
                 <span>{account.username}</span>
               </span>
+              {!selected && <RoundhouseSettings {...glowSettings} />}
               <button title="Sign out" aria-label="Sign out" onClick={() => window.app.logout()}>
                 <img src={SignOut} alt="" />
               </button>
@@ -430,6 +456,15 @@ export default function Roundhouse() {
                 </div>
               </nav>
               <div className="rh-surface" ref={surface}>
+                {player.ambientGlow && player.ambientColors && player.status === "playing" && (
+                  <AmbientGlow
+                    colors={player.ambientColors}
+                    intensity={glowSettings.intensity}
+                    falloff={glowSettings.falloff}
+                    frame={player.videoFrame}
+                    {...surfaceSize}
+                  />
+                )}
                 {!["playing"].includes(player.status) && (
                   <div className="rh-player-message">
                     <h2>
@@ -537,6 +572,7 @@ export default function Roundhouse() {
                     </DropdownMenuRadioGroup>
                   </DropdownMenuContent>
                 </DropdownMenu>
+                <RoundhouseSettings {...glowSettings} onOpenChange={setAppSettingsOpen} />
                 <button
                   className="rh-icon-control"
                   aria-label={fullscreen && cinema ? "Exit cinema" : "Cinema"}

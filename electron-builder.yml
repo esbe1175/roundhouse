@@ -10,6 +10,8 @@ files:
   - README.md
   - THIRD_PARTY_NOTICES.md
 extraResources:
+  - from: resources/player
+    to: player
   - from: LICENSE
     to: licenses/Roundhouse-GPL-3.0.txt
   - from: THIRD_PARTY_NOTICES.md

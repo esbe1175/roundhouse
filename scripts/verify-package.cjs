@@ -25,6 +25,7 @@ for (const value of secrets)
 for (const file of [
   "mpv/mpv.exe",
   "native/roundhouse_host.node",
+  "player/ambient.lua",
   "app.asar.unpacked/resources/icons/win/KickTalk_v1.ico",
   "licenses/Roundhouse-GPL-3.0.txt",
   "licenses/THIRD_PARTY_NOTICES.md",
