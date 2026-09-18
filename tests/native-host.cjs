@@ -33,7 +33,14 @@ app.whenReady().then(async () => {
     assert.equal(host.geometry().left, Math.floor(fullGeometry.width * 0.2));
     assert.equal(host.geometry().right, Math.floor(fullGeometry.width * 0.8));
     assert.equal(host.geometry().width, fullGeometry.width);
+    host.bounds(20, 30, 640, 360, true, 40, 48, 0, 0, 1, 1, [500, 120, 120, 180]);
+    assert.equal(host.geometry(550, 200).contains, false, "menu rectangle must reveal Chromium");
+    assert.equal(host.geometry(200, 200).contains, true, "video beside menu must remain visible");
+    assert.equal(host.geometry(550, 100).contains, true, "video above menu must remain visible");
+    assert.equal(host.geometry().width, fullGeometry.width);
+    assert.equal(host.geometry().height, fullGeometry.height);
     host.bounds(20, 30, 640, 360, true, 0, 0);
+    assert.equal(host.geometry(550, 200).contains, true, "closing menu restores its video region");
     const pipe = `\\\\.\\pipe\\roundhouse-test-${process.pid}`;
     child = spawn(
       path.resolve("resources/mpv/mpv.exe"),

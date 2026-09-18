@@ -67,7 +67,7 @@ The **Roundhouse settings** gear in the video controls (or overview title bar) i
 
 Current defaults are enabled, 50% intensity and 35% falloff. First-run settings and reset both read [utils/glow-settings.mjs](utils/glow-settings.mjs), so release defaults can be tuned in one place.
 
-MPV samples a 6×4 color palette every three seconds; only 24 RGB colors cross IPC. Chromium blurs a 96×64 canvas once per sample and scales it behind the video. No second video decoder, image files, continuous canvas loop or full-resolution image transfer is used. Sampling stops while paused, minimized, hidden, disabled, at zero intensity, or when there are no black bars. The native video rectangle retains its dimensions; its black bars are clipped to reveal the glow.
+MPV samples a 6×4 color palette every three seconds; only 24 RGB colors cross IPC. Chromium morphs between two tiny blurred color fields over 2.6 seconds, keeping the previous field visible throughout so there is no dip to black. A soft Gaussian falloff extends from the picture edges and rounds around corners, scaled to the video's dimensions for the same appearance at 1080p and 4K with matching aspect ratios. No second video decoder, image files, JavaScript animation loop or full-resolution image transfer is used. Sampling stops while paused, minimized, hidden, disabled, at zero intensity, or when there are no black bars. The native video rectangle retains its dimensions; its black bars are clipped to reveal the glow. Player menus cut out only their own rectangles, preserving the video alongside them.
 
 ## Development (PowerShell)
 

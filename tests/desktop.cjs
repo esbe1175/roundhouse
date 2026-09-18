@@ -387,10 +387,47 @@ const assert = require("node:assert/strict");
     await require("./chat-ui.cjs")({ app, page, errors });
     // Roundhouse owns its playback settings; chat settings remain separate.
     await expect(page.locator(".rh-ambient")).toBeVisible({ timeout: 10000 });
+    const morph = await page.locator(".rh-ambient").evaluate((el) => {
+      const [base, target] = el.querySelectorAll("canvas");
+      const animation = target.getAnimations()[0];
+      animation.pause();
+      const duration = animation.effect.getTiming().duration;
+      const opacity = [];
+      for (const time of [0, duration / 2, duration]) {
+        animation.currentTime = time;
+        opacity.push(Number(getComputedStyle(target).opacity));
+      }
+      const baseOpacity = getComputedStyle(base).opacity;
+      const alpha = base.getContext("2d").getImageData(48, 32, 1, 1).data[3];
+      animation.play();
+      return { duration, opacity, baseOpacity, alpha };
+    });
+    assert.equal(morph.duration, 2600);
+    assert.deepEqual(morph.opacity, [0, 0.5, 1]);
+    assert.equal(morph.baseOpacity, "1");
+    assert.equal(morph.alpha, 255, "the old color field remains opaque throughout the morph");
     await hoverEdge("bottom");
     await page.getByRole("button", { name: "Roundhouse settings", exact: true }).click();
     const ambientSetting = page.getByRole("menuitemcheckbox", { name: "Ambient glow", exact: true });
     await expect(ambientSetting).toBeChecked();
+    // Inspect the real HWND region, since Chromium screenshots omit child video.
+    await expect
+      .poll(async () => {
+        const surface = await page.locator(".rh-surface").boundingBox();
+        const menu = await page.locator(".rh-settings-menu").boundingBox();
+        const geometry = await app.evaluate(({ app }) => {
+          const path = process.getBuiltinModule("node:path");
+          const { createRequire } = process.getBuiltinModule("node:module");
+          const require = createRequire(path.join(app.getAppPath(), "package.json"));
+          const addon = app.isPackaged
+            ? path.join(process.resourcesPath, "native/roundhouse_host.node")
+            : path.join(app.getAppPath(), "native/build/Release/roundhouse_host.node");
+          return require(addon).geometry();
+        });
+        // Geometry is in physical pixels; the fixture runs with Chromium zoom 1.
+        return geometry.bottom / (geometry.width / surface.width) > menu.y - surface.y + 20;
+      })
+      .toBe(true);
     await ambientSetting.click();
     await expect(ambientSetting).not.toBeChecked();
     await expect(page.locator(".rh-ambient")).toHaveCount(0);

@@ -289,6 +289,19 @@ export class Player {
       throw new Error("Invalid title bar height.");
     if (!Number.isFinite(rect.dividerWidth ?? 0) || (rect.dividerWidth ?? 0) < 0 || (rect.dividerWidth ?? 0) > 16)
       throw new Error("Invalid divider width.");
+    const holes = rect.overlayRects ?? [];
+    if (
+      !Array.isArray(holes) ||
+      holes.length > 16 ||
+      !holes.every(
+        (hole) =>
+          hole &&
+          ["x", "y", "width", "height"].every(
+            (key) => Number.isFinite(hole[key]) && hole[key] >= 0 && hole[key] < 20000,
+          ),
+      )
+    )
+      throw new Error("Invalid player overlay rectangles.");
     this.rect = rect;
     const zoom = this.window.webContents.getZoomFactor();
     const visible = !!rect.visible && !this.window.isMinimized();
@@ -306,6 +319,7 @@ export class Player {
       top * zoom,
       bottom * zoom,
       ...clip,
+      holes.flatMap((hole) => [hole.x * zoom, hole.y * zoom, hole.width * zoom, hole.height * zoom]),
     );
   }
   async control(action, value) {

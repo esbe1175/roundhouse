@@ -292,8 +292,8 @@ export default function Roundhouse() {
           ...document.querySelectorAll('[role="dialog"], [role="menu"], [data-radix-popper-content-wrapper]'),
         ];
         const covered = overlays.some((el) => {
-          // The quality menu uses the existing bottom video cutout, leaving
-          // the rest of the native video visible while choosing a quality.
+          // Player menus use individual native cutouts; other dialogs hide the
+          // surface until they close.
           if (
             el.matches(".rh-quality-menu, .rh-settings-menu") ||
             el.querySelector(".rh-quality-menu, .rh-settings-menu")
@@ -309,9 +309,15 @@ export default function Roundhouse() {
             r.bottom > rect.top
           );
         });
-        const qualityMenu = document
-          .querySelector('.rh-quality-menu[data-state="open"], .rh-settings-menu[data-state="open"]')
-          ?.getBoundingClientRect();
+        const overlayRects = [...document.querySelectorAll(".rh-quality-menu, .rh-settings-menu")]
+          .map((el) => (el.closest("[data-radix-popper-content-wrapper]") || el).getBoundingClientRect())
+          .filter((r) => r.left < rect.right && r.right > rect.left && r.top < rect.bottom && r.bottom > rect.top)
+          .map((r) => ({
+            x: Math.max(0, r.left - rect.left),
+            y: Math.max(0, r.top - rect.top),
+            width: Math.min(rect.right, r.right) - Math.max(rect.left, r.left),
+            height: Math.min(rect.bottom, r.bottom) - Math.max(rect.top, r.top),
+          }));
         const bottomHeight = bottomShown ? bottomBar.current?.getBoundingClientRect().height || 0 : 0;
         void api
           .bounds({
@@ -321,7 +327,8 @@ export default function Roundhouse() {
             height: rect.height,
             visible: !covered && ["playing", "loading"].includes(player.status),
             overlayTop: topShown ? topBar.current?.getBoundingClientRect().height || 0 : 0,
-            overlayBottom: Math.min(512, Math.max(bottomHeight, qualityMenu ? rect.bottom - qualityMenu.top : 0)),
+            overlayBottom: bottomHeight,
+            overlayRects,
             dividerWidth: videoFullscreen ? 0 : 7,
             titlebarHeight: document.querySelector(".rh-titlebar")?.getBoundingClientRect().height || 0,
           })
