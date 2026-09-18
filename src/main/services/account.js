@@ -172,7 +172,15 @@ export class KickAccount {
   }
   async follows() {
     if (!this.user) throw new Error("Sign in to Kick first.");
-    const request = async (url) => (await this.request(url)).data;
+    // Kick's /info response can be cached for four hours and pins thumbnails
+    // with versionId. Refresh both the local HTTP cache and the CDN cache key,
+    // rather than cache-busting an image URL that still names an old snapshot.
+    const refreshId = String(Date.now());
+    const request = async (url) => {
+      const target = new URL(url);
+      target.searchParams.set("_roundhouse", refreshId);
+      return (await this.request(target.href, { cache: "no-store" })).data;
+    };
     return resolveFollowDetails(await collectFollows(request), request);
   }
 }

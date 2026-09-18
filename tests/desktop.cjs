@@ -70,6 +70,13 @@ const assert = require("node:assert/strict");
       route.fulfill({ status: 200, contentType: "application/json", body: "[]" }),
     );
     await page.routeWebSocket(/wss:.*/, (socket) => socket.close());
+    await page.route("https://media.fixture/fresh-thumbnail.svg*", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "image/svg+xml",
+        body: '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"><rect width="320" height="180" fill="green"/></svg>',
+      }),
+    );
     await app.evaluate(({ session, app, screen, BrowserWindow }) => {
       global.roundhouseTestCursor = { x: -10000, y: -10000 };
       global.roundhouseTestFocused = true;
@@ -80,8 +87,12 @@ const assert = require("node:assert/strict");
       kick.cookies.get = async () => [{ name: "session_token", value: "test-only" }];
       global.roundhouseTestRateLimit = false;
       global.roundhouseTestMessages = [];
+      global.roundhouseTestThumbnailVersion = 0;
+      global.roundhouseTestFollowRequests = [];
       kick.fetch = async (url, options = {}) => {
         const pathname = new URL(url).pathname;
+        if (pathname.endsWith("/info") || pathname === "/api/v2/channels/followed-page")
+          global.roundhouseTestFollowRequests.push({ url, cache: options.cache });
         let data;
         if (options.method === "POST" && pathname.includes("/messages/send/")) {
           global.roundhouseTestMessages.push(JSON.parse(options.body));
@@ -122,7 +133,11 @@ const assert = require("node:assert/strict");
               is_live: true,
               id: 21,
               session_title: "A test broadcast",
-              thumbnail: { url: "https://media.fixture/missing-thumbnail.webp" },
+              thumbnail: {
+                url: global.roundhouseTestThumbnailVersion
+                  ? `https://media.fixture/fresh-thumbnail.svg?versionId=${global.roundhouseTestThumbnailVersion}`
+                  : "https://media.fixture/missing-thumbnail.webp",
+              },
             },
             playback_url: "https://media.fixture/master.m3u8",
             subscriber_badges: [],
@@ -183,6 +198,28 @@ const assert = require("node:assert/strict");
     await expect(page.getByText("A test broadcast", { exact: true })).toBeVisible();
     // A failed remote image must be replaced, not left as a broken image box.
     await expect(page.locator(".rh-channel:not(.rh-offline) .rh-placeholder")).toBeVisible();
+    // A new overview refresh must fetch fresh metadata, then replace the pinned
+    // thumbnail version. Adding a cache buster to the old image is insufficient.
+    const thumbnail = page.locator(".rh-channel:not(.rh-offline) .rh-thumbnail > img");
+    const previousRequests = await app.evaluate(() => global.roundhouseTestFollowRequests);
+    for (const version of [1, 2]) {
+      await app.evaluate((_, version) => {
+        global.roundhouseTestThumbnailVersion = version;
+      }, version);
+      await page.getByRole("button", { name: "Refresh", exact: true }).click();
+      await expect(thumbnail).toHaveAttribute("src", `https://media.fixture/fresh-thumbnail.svg?versionId=${version}`);
+      await expect.poll(() => thumbnail.evaluate((img) => img.naturalWidth)).toBe(320);
+    }
+    const refreshedRequests = await app.evaluate(() => global.roundhouseTestFollowRequests);
+    assert.ok(
+      refreshedRequests.every(
+        (request) => request.cache === "no-store" && new URL(request.url).searchParams.has("_roundhouse"),
+      ),
+    );
+    assert.notEqual(
+      new URL(previousRequests[0].url).searchParams.get("_roundhouse"),
+      new URL(refreshedRequests.at(-1).url).searchParams.get("_roundhouse"),
+    );
     await page.screenshot({ path: ".cache/overview.png" });
     await page.getByRole("textbox", { name: "Search followed channels" }).fill("not followed");
     await expect(page.getByText("No live channels match your search.")).toBeVisible();
