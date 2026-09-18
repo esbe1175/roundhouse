@@ -1,6 +1,6 @@
 import { memo, useMemo, useEffect, useState, useRef, useCallback } from "react";
 import { Virtuoso } from "react-virtuoso";
-import useChatStore from "../../providers/ChatProvider";
+import useChatFollow from "./useChatFollow";
 import Message from "./Message";
 import MouseScroll from "../../assets/icons/mouse-scroll-fill.svg?asset";
 import { FilterSession } from "../../../../../utils/chat-filters.mjs";
@@ -22,8 +22,6 @@ const MessagesHandler = memo(
     const virtuosoRef = useRef(null);
     const chatContainerRef = useRef(null);
     const [silencedUserIds, setSilencedUserIds] = useState(new Set());
-    const [atBottom, setAtBottom] = useState(true);
-    const [isPaused, setIsPaused] = useState(false);
     const filters = useRef({ room: chatroomId, session: new FilterSession() });
 
     const filteredMessages = useMemo(() => {
@@ -32,53 +30,26 @@ const MessagesHandler = memo(
       if (filters.current.room !== chatroomId) filters.current = { room: chatroomId, session: new FilterSession() };
       const visible = messages.filter((message) => {
         if (message?.chatroom_id != chatroomId) return false;
-        if (message?.type === "system" || message?.type === "mod_action") return true;
+        if (message?.type === "mod_action") return !!settings?.chatrooms?.showModActions;
+        if (message?.type === "system") return true;
         if (message?.type !== "reply" && message?.type !== "message") return true;
 
         return message?.sender?.id && !silencedUserIds.has(message?.sender?.id);
       });
       return filters.current.session.apply(visible, settings?.chatFilters, allStvEmotes);
-    }, [messages, chatroomId, silencedUserIds, settings?.chatFilters, allStvEmotes]);
+    }, [
+      messages,
+      chatroomId,
+      silencedUserIds,
+      settings?.chatFilters,
+      settings?.chatrooms?.showModActions,
+      allStvEmotes,
+    ]);
 
-    const handleScroll = useCallback(
-      (e) => {
-        if (!e?.target) return;
-        const { scrollHeight, scrollTop, clientHeight } = e.target;
-        const isNearBottom = scrollHeight - scrollTop - clientHeight < 250;
-
-        setAtBottom(isNearBottom);
-
-        if (isNearBottom !== !isPaused) {
-          setIsPaused(!isNearBottom);
-          useChatStore.getState().handleChatroomPause(chatroomId, !isNearBottom);
-        }
-      },
-      [chatroomId, isPaused],
-    );
-
-    const togglePause = () => {
-      const newPausedState = !isPaused;
-      setIsPaused(newPausedState);
-      useChatStore.getState().handleChatroomPause(chatroomId, newPausedState);
-
-      virtuosoRef.current?.scrollToIndex({
-        index: filteredMessages.length - 1,
-        align: "start",
-        behavior: "instant",
-      });
-
-      if (!newPausedState) {
-        setAtBottom(true);
-      }
-    };
+    const follow = useChatFollow(chatroomId, filteredMessages, virtuosoRef);
 
     const itemContent = useCallback(
       (index, message) => {
-        // Hide mod actions if the setting is disabled
-        if (message?.type === "mod_action" && !settings?.chatrooms?.showModActions) {
-          return false;
-        }
-
         return (
           <div
             className={message.filterReason ? "rh-filtered-message" : undefined}
@@ -162,9 +133,10 @@ const MessagesHandler = memo(
           data={filteredMessages}
           itemContent={itemContent}
           computeItemKey={computeItemKey}
-          onScroll={handleScroll}
-          followOutput={isPaused ? false : "smooth"}
-          initialTopMostItemIndex={filteredMessages?.length - 1}
+          scrollerRef={follow.scrollerRef}
+          followOutput={follow.followOutput}
+          totalListHeightChanged={follow.pin}
+          initialTopMostItemIndex={{ index: Math.max(0, filteredMessages.length - 1), align: "end" }}
           atBottomThreshold={6}
           overscan={50}
           increaseViewportBy={400}
@@ -176,11 +148,11 @@ const MessagesHandler = memo(
           }}
         />
 
-        {!atBottom && (
-          <div className="scrollToBottomBtn" onClick={togglePause}>
+        {follow.paused && (
+          <button type="button" className="scrollToBottomBtn" onClick={follow.resume}>
             Scroll To Bottom
-            <img src={MouseScroll} width={24} height={24} alt="Scroll To Bottom" />
-          </div>
+            <img src={MouseScroll} width={24} height={24} alt="" />
+          </button>
         )}
       </div>
     );

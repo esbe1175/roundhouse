@@ -69,7 +69,13 @@ const assert = require("node:assert/strict");
     await page.route("https://**/*", (route) =>
       route.fulfill({ status: 200, contentType: "application/json", body: "[]" }),
     );
-    await page.routeWebSocket(/wss:.*/, (socket) => socket.close());
+    let kickSocket;
+    await page.routeWebSocket(/wss:.*/, (socket) => {
+      if (socket.url().includes("pusher.com")) {
+        kickSocket = socket;
+        socket.onMessage(() => {});
+      } else socket.close();
+    });
     await page.route("https://files.kick.com/emotes/**", (route) =>
       route.fulfill({
         status: 200,
@@ -385,6 +391,7 @@ const assert = require("node:assert/strict");
     await page.keyboard.press("Enter");
     assert.equal(await app.evaluate(() => global.roundhouseTestMessages.length), 1);
     await require("./chat-ui.cjs")({ app, page, errors });
+    await require("./chat-follow.cjs")({ page, getSocket: () => kickSocket });
     // Roundhouse owns its playback settings; chat settings remain separate.
     await expect(page.locator(".rh-ambient")).toBeVisible({ timeout: 10000 });
     const morph = await page.locator(".rh-ambient").evaluate((el) => {

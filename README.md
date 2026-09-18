@@ -51,6 +51,8 @@ Open the gear beside the chat tabs for **Chat settings**, then choose **Chat →
 
 Pins sit directly below the chat tabs. Hover previews stay inside the chat pane, clear of the native video surface. User profiles open within the display's usable area, with an explicit close button and Escape support. Missing or failed avatars use local initials, and failed profile requests offer Retry.
 
+Chat keeps the latest visible message at the bottom as history rolls over, filters hide rows, emotes load, or the pane resizes. Scrolling up with the wheel, keyboard, touch, or scrollbar pauses following so you can read. **Scroll To Bottom**, End, or scrolling back to the bottom resumes following.
+
 ### Low latency playback
 
 Hover the bottom of the video and toggle **Low latency**. Green means enabled. The preference is saved across streams and app restarts; changing it reloads video while preserving quality, volume, mute and pause, without reconnecting chat. It starts disabled. Turn it off if your connection struggles to keep up, and use **Live** to return to the live edge after pausing.
