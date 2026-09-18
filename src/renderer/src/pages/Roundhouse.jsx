@@ -10,6 +10,17 @@ import Gear from "../assets/icons/gear-fill.svg?asset";
 import SignOut from "../assets/icons/sign-out-bold.svg?asset";
 import User from "../assets/icons/user-fill.svg?asset";
 import Play from "../assets/icons/play-fill.svg?asset";
+import CaretDown from "../assets/icons/caret-down-fill.svg?asset";
+import PlaybackIcon from "../components/PlaybackIcon";
+import { Slider } from "../components/Shared/Slider";
+import { Switch } from "../components/Shared/Switch";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+} from "../components/Shared/Dropdown";
 import "../assets/styles/pages/ChatPage.scss";
 import "../assets/styles/pages/Roundhouse.scss";
 
@@ -76,6 +87,8 @@ export default function Roundhouse() {
   const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
   const [topFocus, setTopFocus] = useState(false),
     [bottomFocus, setBottomFocus] = useState(false);
+  const [qualityOpen, setQualityOpen] = useState(false);
+  const [bottomPressed, setBottomPressed] = useState(false);
   const [draggingDivider, setDraggingDivider] = useState(false);
   const [chatTools, setChatTools] = useState(null);
   const dividerDrag = useRef(null);
@@ -89,7 +102,24 @@ export default function Roundhouse() {
   const topBar = useRef(null),
     bottomBar = useRef(null);
   const topShown = !!player.hoverTop || topFocus,
-    bottomShown = !!player.hoverBottom || bottomFocus;
+    bottomShown = !!player.hoverBottom || bottomFocus || qualityOpen || bottomPressed;
+  useEffect(() => {
+    let frame;
+    // Keep the toolbar present through click dispatch, including a fast click
+    // before the native cursor poll catches up after a menu closes.
+    const release = () => {
+      frame = requestAnimationFrame(() => setBottomPressed(false));
+    };
+    window.addEventListener("pointerup", release);
+    window.addEventListener("pointercancel", release);
+    window.addEventListener("blur", release);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("pointerup", release);
+      window.removeEventListener("pointercancel", release);
+      window.removeEventListener("blur", release);
+    };
+  }, []);
   const overview = useRef(null),
     scroll = useRef(0),
     surface = useRef(null),
@@ -110,6 +140,7 @@ export default function Roundhouse() {
   const back = useCallback(async () => {
     setTopFocus(false);
     setBottomFocus(false);
+    setQualityOpen(false);
     setDraggingDivider(false);
     generation.current++;
     selectedRef.current = null;
@@ -233,6 +264,9 @@ export default function Roundhouse() {
           ...document.querySelectorAll('[role="dialog"], [role="menu"], [data-radix-popper-content-wrapper]'),
         ];
         const covered = overlays.some((el) => {
+          // The quality menu uses the existing bottom video cutout, leaving
+          // the rest of the native video visible while choosing a quality.
+          if (el.matches(".rh-quality-menu") || el.querySelector(".rh-quality-menu")) return false;
           const r = el.getBoundingClientRect();
           return (
             r.width &&
@@ -243,6 +277,8 @@ export default function Roundhouse() {
             r.bottom > rect.top
           );
         });
+        const qualityMenu = document.querySelector('.rh-quality-menu[data-state="open"]')?.getBoundingClientRect();
+        const bottomHeight = bottomShown ? bottomBar.current?.getBoundingClientRect().height || 0 : 0;
         void api
           .bounds({
             x: Math.max(0, rect.x),
@@ -251,7 +287,7 @@ export default function Roundhouse() {
             height: rect.height,
             visible: !covered && ["playing", "loading"].includes(player.status),
             overlayTop: topShown ? topBar.current?.getBoundingClientRect().height || 0 : 0,
-            overlayBottom: bottomShown ? bottomBar.current?.getBoundingClientRect().height || 0 : 0,
+            overlayBottom: Math.min(256, Math.max(bottomHeight, qualityMenu ? rect.bottom - qualityMenu.top : 0)),
             dividerWidth: fullscreen ? 0 : 7,
             titlebarHeight: document.querySelector(".rh-titlebar")?.getBoundingClientRect().height || 0,
           })
@@ -281,12 +317,13 @@ export default function Roundhouse() {
 
   useEffect(() => {
     const keys = (event) => {
-      if (!selected) return;
-      if (event.key === "Escape" && fullscreen) {
+      if (!selected || event.defaultPrevented) return;
+      if (event.key === "Escape" && fullscreen && !qualityOpen) {
         void api.fullscreen(false);
         return;
       }
-      if (event.target.closest('input,textarea,[contenteditable="true"],button,select')) return;
+      if (event.target.closest('input,textarea,[contenteditable="true"],button,select,[role="slider"],[role="menu"]'))
+        return;
       if (event.code === "Space") {
         event.preventDefault();
         void control("pause");
@@ -296,7 +333,7 @@ export default function Roundhouse() {
     };
     window.addEventListener("keydown", keys);
     return () => window.removeEventListener("keydown", keys);
-  }, [selected, fullscreen]);
+  }, [selected, fullscreen, qualityOpen]);
   const resizeChat = (value) => {
     const next = Math.max(280, Math.min(value, window.innerWidth - 480));
     setWidth(next);
@@ -409,51 +446,95 @@ export default function Roundhouse() {
                 role="toolbar"
                 aria-label="Playback controls"
                 className={`rh-player-controls rh-video-overlay ${bottomShown ? "is-visible" : ""}`}
-                onPointerDownCapture={() => setBottomFocus(false)}
+                onPointerDownCapture={() => {
+                  setBottomPressed(true);
+                  setBottomFocus(false);
+                }}
                 onFocusCapture={(event) => setBottomFocus(event.target.matches(":focus-visible"))}
                 onBlurCapture={(event) => {
                   if (!event.currentTarget.contains(event.relatedTarget)) setBottomFocus(false);
                 }}
               >
-                <button disabled={player.status !== "playing"} onClick={() => void control("pause")}>
-                  {player.pause ? "Play" : "Pause"}
+                <button
+                  className="rh-icon-control"
+                  aria-label={player.pause ? "Play" : "Pause"}
+                  title={player.pause ? "Play" : "Pause"}
+                  disabled={player.status !== "playing"}
+                  onClick={() => void control("pause")}
+                >
+                  <PlaybackIcon kind={player.pause ? "play" : "pause"} />
                 </button>
-                <button onClick={() => void control("mute")}>{player.mute ? "Unmute" : "Mute"}</button>
-                <input
-                  aria-label="Volume"
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={player.volume ?? 80}
-                  onChange={(event) => void control("volume", Number(event.target.value))}
+                <button
+                  className="rh-icon-control"
+                  aria-label={player.mute ? "Unmute" : "Mute"}
+                  title={player.mute ? "Unmute" : "Mute"}
+                  onClick={() => void control("mute")}
+                >
+                  <PlaybackIcon kind={player.mute || player.volume === 0 ? "muted" : "volume"} />
+                </button>
+                <Slider
+                  className="rh-volume"
+                  thumbLabel="Volume"
+                  title={`Volume: ${Math.round(player.volume ?? 80)}%`}
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={[player.volume ?? 80]}
+                  onValueChange={([volume]) => void control("volume", volume)}
                 />
                 <button onClick={() => void control("live")}>● Live</button>
                 <span className="rh-player-status">
                   {player["paused-for-cache"] ? "Buffering" : player.status === "playing" ? "MPV" : player.status}
                 </span>
-                <button
+                <div
                   className="rh-low-latency"
-                  aria-pressed={!!player.lowLatency}
-                  disabled={player.status === "loading"}
                   title="Play closer to live with less buffering. Changing this reloads the video; turn off if playback stutters."
-                  onClick={() => void control("lowLatency", !player.lowLatency)}
                 >
-                  Low latency
-                </button>
-                <select
-                  aria-label="Video quality"
-                  value={player.quality}
-                  onChange={(event) => void control("quality", event.target.value)}
+                  <label htmlFor="rh-low-latency">Low latency</label>
+                  <Switch
+                    id="rh-low-latency"
+                    aria-label="Low latency"
+                    checked={!!player.lowLatency}
+                    disabled={player.status === "loading"}
+                    onCheckedChange={(checked) => void control("lowLatency", checked)}
+                  />
+                </div>
+                <DropdownMenu open={qualityOpen} onOpenChange={setQualityOpen} modal={false}>
+                  <DropdownMenuTrigger asChild>
+                    <button className="rh-quality" aria-label="Video quality" title="Video quality">
+                      {player.qualities.find((q) => q.id === player.quality)?.label || "Auto quality"}
+                      <img src={CaretDown} width={14} height={14} alt="" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    className="rh-quality-menu"
+                    side="top"
+                    align="end"
+                    aria-label="Video quality"
+                    collisionPadding={8}
+                  >
+                    <DropdownMenuRadioGroup
+                      value={player.quality}
+                      onValueChange={(quality) => void control("quality", quality)}
+                    >
+                      <DropdownMenuRadioItem className="dropdownMenuItem" value="auto">
+                        Auto quality
+                      </DropdownMenuRadioItem>
+                      {player.qualities.map((q) => (
+                        <DropdownMenuRadioItem className="dropdownMenuItem" key={q.id} value={q.id}>
+                          {q.label}
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <button
+                  className="rh-icon-control"
+                  aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+                  title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+                  onClick={() => api.fullscreen(!fullscreen)}
                 >
-                  <option value="auto">Auto quality</option>
-                  {player.qualities.map((q) => (
-                    <option key={q.id} value={q.id}>
-                      {q.label}
-                    </option>
-                  ))}
-                </select>
-                <button onClick={() => api.fullscreen(!fullscreen)}>
-                  {fullscreen ? "Exit fullscreen" : "Fullscreen"}
+                  <PlaybackIcon kind={fullscreen ? "collapse" : "expand"} />
                 </button>
               </div>
             </section>

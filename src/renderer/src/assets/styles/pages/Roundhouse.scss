@@ -470,18 +470,80 @@
     padding: 6px 8px;
     font-size: 12px;
   }
-  input {
-    width: 70px;
-    accent-color: var(--text-accent);
+  .sliderRoot.rh-volume {
+    width: 105px;
+    flex: 0 0 105px;
+    height: 28px;
+    margin-right: 4px;
+    .sliderThumb:focus-visible {
+      outline: 2px solid var(--text-accent);
+      outline-offset: 2px;
+    }
   }
-  .rh-low-latency[aria-pressed="true"] {
-    color: var(--text-accent);
-    border-color: var(--text-accent);
+  .rh-icon-control {
+    display: grid;
+    place-items: center;
+    flex: 0 0 32px;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text-secondary);
+    &:hover {
+      background: transparent;
+      color: var(--text-primary);
+    }
+  }
+  .rh-low-latency {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    white-space: nowrap;
+    cursor: pointer;
+    .switch {
+      padding: 0;
+      border: 2px solid transparent;
+      border-radius: 9999px;
+      &[data-state="checked"] {
+        background: var(--switch-checked);
+      }
+      &[data-state="unchecked"] {
+        background: var(--switch-unchecked);
+      }
+    }
+  }
+  .rh-quality {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 116px;
+    border: 0;
+    font-size: 13px;
+    font-weight: 500;
+    background: #ffffff13;
+    color: var(--text-secondary);
   }
   .rh-player-status {
     font-size: 11px;
     margin-left: auto;
     color: var(--text-tertiary);
+  }
+}
+.rh-quality-menu {
+  max-height: 160px;
+  .indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    img {
+      width: 8px;
+      height: 8px;
+    }
   }
 }
 .rh-video-overlay {
