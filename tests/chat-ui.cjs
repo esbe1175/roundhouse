@@ -5,6 +5,13 @@ module.exports = async ({ app, page, errors }) => {
   const pin = page.locator(".rh-chat .pinnedMessage");
   await expect(pin).toContainText("Fixture pinned notice");
   const tabs = await page.locator(".rh-chat-tabs").boundingBox();
+  const gear = await page.getByRole("button", { name: "Chat settings", exact: true }).boundingBox();
+  const pinButton = await page.getByRole("button", { name: "Pin Message", exact: true }).boundingBox();
+  assert.equal(gear.width, 28);
+  assert.equal(gear.height, 28);
+  assert.equal(pinButton.height, gear.height);
+  assert.equal(pinButton.y, gear.y);
+  assert.equal(gear.x - pinButton.x - pinButton.width, 4);
   const pinBox = await pin.boundingBox();
   assert.ok(pinBox.y >= tabs.y + tabs.height && pinBox.y <= tabs.y + tabs.height + 9);
   // Pins occupy layout space; hiding a pin releases it rather than retaining an offset.
@@ -97,9 +104,10 @@ module.exports = async ({ app, page, errors }) => {
   await expect.poll(() => profile.isClosed()).toBe(true);
 
   const pendingSettings = app.waitForEvent("window");
-  await page.getByRole("button", { name: "Chat filters", exact: true }).click();
+  await page.getByRole("button", { name: "Chat settings", exact: true }).click();
   const settings = await pendingSettings;
   settings.on("pageerror", (error) => errors.push(error.message));
+  await settings.getByRole("button", { name: "Filters", exact: true }).click();
   await expect(settings.getByRole("heading", { name: "Chat filters" })).toBeVisible();
   await settings.getByRole("switch", { name: "Enable chat filters" }).click();
   await settings.getByRole("textbox", { name: "Add username" }).fill("@FixtureViewer");
@@ -131,8 +139,9 @@ module.exports = async ({ app, page, errors }) => {
   await expect.poll(() => page.evaluate(async () => (await window.app.store.get()).chatFilters.enabled)).toBe(false);
   await settings.close();
   const reopening = app.waitForEvent("window");
-  await page.getByRole("button", { name: "Chat filters", exact: true }).click();
+  await page.getByRole("button", { name: "Chat settings", exact: true }).click();
   const restored = await reopening;
+  await restored.getByRole("button", { name: "Filters", exact: true }).click();
   await expect(restored.getByRole("heading", { name: "Chat filters" })).toBeVisible();
   await expect(restored.getByRole("switch", { name: "Enable chat filters" })).not.toBeChecked();
   await restored.getByRole("tab", { name: "Text rules" }).click();

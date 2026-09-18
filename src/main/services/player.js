@@ -4,11 +4,21 @@ import { join } from "node:path";
 import { existsSync } from "node:fs";
 import { MpvIPC } from "./mpv-ipc.mjs";
 import { parseQualities } from "./channels.mjs";
+import store from "../../../utils/config";
+import { latencyOptions } from "./playback-options.mjs";
 
 export class Player {
   constructor(account) {
     this.account = account;
-    this.state = { status: "idle", pause: false, volume: 80, mute: false, qualities: [], quality: "auto" };
+    this.state = {
+      status: "idle",
+      pause: false,
+      volume: 80,
+      mute: false,
+      qualities: [],
+      quality: "auto",
+      lowLatency: store.get("lowLatency"),
+    };
     this.generation = 0;
   }
   emit(patch) {
@@ -32,7 +42,7 @@ export class Player {
       const inside = active && x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height;
       const overTitlebar = !!active && x >= 0 && x < bounds.width / zoom && y >= 0 && y < (rect.titlebarHeight || 0);
       const hoverTop = overTitlebar || (!!inside && y - rect.y < 64);
-      const hoverBottom = !!inside && rect.y + rect.height - y < 64;
+      const hoverBottom = !!inside && rect.y + rect.height - y < Math.max(64, rect.overlayBottom || 0);
       // The invisible divider sits over the first few pixels of chat. Native
       // video can swallow DOM mouseleave, so its hover must also use screen position.
       const hoverDivider =
@@ -50,7 +60,7 @@ export class Player {
     }, 100);
     this.window.once("closed", () => clearInterval(this.hoverTimer));
   }
-  async open(slug) {
+  async open(slug, { quality = "auto", pause = false } = {}) {
     if (typeof slug !== "string" || !/^[a-zA-Z0-9_-]+$/.test(slug)) throw new Error("Invalid channel.");
     const generation = ++this.generation;
     this.slug = slug;
@@ -60,8 +70,9 @@ export class Player {
       status: "loading",
       error: null,
       qualities: [],
-      quality: "auto",
-      pause: false,
+      quality,
+      pause,
+      "paused-for-cache": false,
       hoverTop: false,
       hoverBottom: false,
     });
@@ -107,6 +118,7 @@ export class Player {
           "--hwdec=auto-safe",
           "--keep-open=no",
           "--ytdl=no",
+          ...latencyOptions(this.state.lowLatency),
         ],
         { windowsHide: true, stdio: "ignore" },
       ));
@@ -138,13 +150,17 @@ export class Player {
         if (event.event === "property-change" && ["pause", "volume", "mute", "paused-for-cache"].includes(event.name))
           this.emit({ [event.name]: event.data });
       };
-      for (const [index, property] of ["pause", "volume", "mute", "paused-for-cache"].entries())
-        await ipc.command(["observe_property", index, property]);
+      // Apply saved values before observing, so MPV's initial defaults cannot
+      // overwrite them while a mode change is restarting the process.
       await ipc.command(["set_property", "volume", this.state.volume]);
       await ipc.command(["set_property", "mute", this.state.mute]);
-      await ipc.command(["loadfile", this.url, "replace"]);
+      await ipc.command(["set_property", "pause", pause]);
+      for (const [index, property] of ["pause", "volume", "mute", "paused-for-cache"].entries())
+        await ipc.command(["observe_property", index, property]);
+      const variant = this.qualities.find((q) => q.id === quality);
+      await ipc.command(["loadfile", variant?.url || this.url, "replace"]);
       if (generation !== this.generation) return;
-      this.emit({ qualities: this.qualities.map(({ id, label }) => ({ id, label })) });
+      this.emit({ quality: variant?.id || "auto", qualities: this.qualities.map(({ id, label }) => ({ id, label })) });
       this.setBounds(this.rect);
     } catch (error) {
       if (generation === this.generation) {
@@ -183,8 +199,16 @@ export class Player {
     );
   }
   async control(action, value) {
+    if (action === "lowLatency") {
+      if (typeof value !== "boolean") throw new Error("Invalid low latency setting.");
+      if (value === this.state.lowLatency) return;
+      store.set("lowLatency", value);
+      this.emit({ lowLatency: value });
+      if (this.slug) return this.open(this.slug, { quality: this.state.quality, pause: this.state.pause });
+      return;
+    }
     if (action === "retry" || action === "live") {
-      if (this.slug) return this.open(this.slug);
+      if (this.slug) return this.open(this.slug, { quality: this.state.quality });
       return;
     }
     if (!this.ipc) throw new Error("No active stream.");

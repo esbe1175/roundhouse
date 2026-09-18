@@ -317,16 +317,10 @@ export default function Roundhouse() {
           </span>
           {account && (
             <div className="rh-account">
-              <button
-                className="rh-account-settings"
-                title="Settings"
-                aria-label="Settings"
-                onClick={() => window.app.settingsDialog.open({ userData: account })}
-              >
+              <span className="rh-account-name">
                 {account.profile_pic && <img className="rh-account-avatar" src={account.profile_pic} alt="" />}
                 <span>{account.username}</span>
-                <img src={Gear} alt="" />
-              </button>
+              </span>
               <button title="Sign out" aria-label="Sign out" onClick={() => window.app.logout()}>
                 <img src={SignOut} alt="" />
               </button>
@@ -437,6 +431,15 @@ export default function Roundhouse() {
                 <span className="rh-player-status">
                   {player["paused-for-cache"] ? "Buffering" : player.status === "playing" ? "MPV" : player.status}
                 </span>
+                <button
+                  className="rh-low-latency"
+                  aria-pressed={!!player.lowLatency}
+                  disabled={player.status === "loading"}
+                  title="Play closer to live with less buffering. Changing this reloads the video; turn off if playback stutters."
+                  onClick={() => void control("lowLatency", !player.lowLatency)}
+                >
+                  Low latency
+                </button>
                 <select
                   aria-label="Video quality"
                   value={player.quality}
@@ -491,15 +494,23 @@ export default function Roundhouse() {
                 />
                 <aside className="rh-chat" style={{ width: effectiveWidth }}>
                   <div className="rh-chat-tabs">
-                    <button className={!mentions ? "active" : ""} onClick={() => setMentions(false)}>
+                    <button className={`rh-chat-tab ${!mentions ? "active" : ""}`} onClick={() => setMentions(false)}>
                       Stream chat
                     </button>
-                    <button className={mentions ? "active" : ""} onClick={() => setMentions(true)}>
+                    <button className={`rh-chat-tab ${mentions ? "active" : ""}`} onClick={() => setMentions(true)}>
                       Mentions
                     </button>
-                    <div className="rh-chat-tools" ref={setChatTools} />
-                    <button className="rh-chat-filter-button" title="Chat filters" aria-label="Chat filters"
-                      onClick={() => window.app.settingsDialog.open({ userData: account, section: "filters" })}><img src={Gear} alt="" width={16} height={16} /></button>
+                    <div className="rh-chat-actions">
+                      <div className="rh-chat-tools" ref={setChatTools} />
+                      <button
+                        className="rh-chat-settings"
+                        title="Chat settings"
+                        aria-label="Chat settings"
+                        onClick={() => window.app.settingsDialog.open({ userData: account })}
+                      >
+                        <img src={Gear} alt="" width={16} height={16} />
+                      </button>
+                    </div>
                   </div>
                   <div className="rh-chat-content">
                     {chatError ? (

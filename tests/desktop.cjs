@@ -232,6 +232,7 @@ const assert = require("node:assert/strict");
     await expect.poll(() => completedLogin.isClosed(), { timeout: 15000 }).toBe(true);
     await expect(page.getByRole("heading", { name: "Following" })).toBeVisible({ timeout: 20000 });
     await expect(page.getByText("A test broadcast", { exact: true })).toBeVisible();
+    await expect(page.locator('.rh-titlebar button[aria-label="Settings"]')).toHaveCount(0);
     // A failed remote image must be replaced, not left as a broken image box.
     await expect(page.locator(".rh-channel:not(.rh-offline) .rh-placeholder")).toBeVisible();
     // A new overview refresh must fetch fresh metadata, then replace the pinned
@@ -410,6 +411,42 @@ const assert = require("node:assert/strict");
     await expect
       .poll(() => app.evaluate(() => global.roundhouseTestLoads.at(-1)))
       .toBe("https://media.fixture/720.m3u8");
+    // Switching modes restarts only video, retaining quality, pause and chat.
+    await page.evaluate(async () => {
+      await window.app.roundhouse.control("volume", 35);
+      await window.app.roundhouse.control("mute");
+    });
+    await expect(page.getByRole("button", { name: "Unmute", exact: true })).toBeVisible();
+    const latency = page.getByRole("button", { name: "Low latency", exact: true });
+    await expect(latency).toHaveAttribute("aria-pressed", "false");
+    const beforeModeChange = await app.evaluate(() => global.roundhouseTestChildren.length);
+    await latency.click();
+    await expect.poll(() => app.evaluate(() => global.roundhouseTestChildren.length)).toBe(beforeModeChange + 1);
+    await expect(page.getByRole("button", { name: "Play", exact: true })).toBeEnabled({ timeout: 15000 });
+    await expect(latency).toBeEnabled({ timeout: 15000 });
+    await expect(latency).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("combobox", { name: "Video quality" })).toHaveValue("0");
+    await expect(page.getByRole("button", { name: "Play", exact: true })).toBeVisible();
+    await expect(input).toBeVisible();
+    await expect(page.getByRole("slider", { name: "Volume" })).toHaveValue("35");
+    await expect(page.getByRole("button", { name: "Unmute", exact: true })).toBeVisible();
+    assert.equal(await page.evaluate(async () => (await window.app.store.get()).lowLatency), true);
+    assert.equal(await app.evaluate(() => global.roundhouseTestLoads.at(-1)), "https://media.fixture/720.m3u8");
+    assert.ok(
+      await app.evaluate(() => global.roundhouseTestChildren.at(-1).spawnargs.includes("--profile=low-latency")),
+    );
+    await expect
+      .poll(() => app.evaluate(() => global.roundhouseTestChildren.filter((child) => child.exitCode === null).length))
+      .toBe(1);
+    const invalidLatency = await page.evaluate(async () => {
+      try {
+        await window.app.roundhouse.control("lowLatency", "yes");
+        return "accepted";
+      } catch (error) {
+        return error.message;
+      }
+    });
+    assert.match(invalidLatency, /Invalid low latency/);
     await input.focus();
     await hoverEdge("center");
     await expect(page.locator(".rh-player-controls")).not.toHaveClass(/is-visible/);
@@ -428,6 +465,11 @@ const assert = require("node:assert/strict");
     await page.locator("summary").click();
     await page.getByRole("button", { name: /Offline channel/ }).click();
     await expect(page.getByRole("heading", { name: "This channel is offline" })).toBeVisible();
+    await expect(latency).toHaveAttribute("aria-pressed", "true");
+    await hoverEdge("bottom");
+    await latency.click();
+    await expect(latency).toHaveAttribute("aria-pressed", "false");
+    assert.equal(await page.evaluate(async () => (await window.app.store.get()).lowLatency), false);
     const width = Number(await divider.getAttribute("aria-valuenow"));
     await divider.focus();
     await page.keyboard.press("ArrowLeft");

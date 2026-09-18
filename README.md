@@ -45,9 +45,15 @@ Hover near the video's top edge to reveal the title and Back button, or its bott
 
 The window title shows the current channel and stream title. Chat tools sit beside the chat tabs. The video/chat boundary has an invisible seven-pixel drag target that turns green on hover, drag, or keyboard focus. In chat, Enter sends the message and Shift+Enter inserts a new line.
 
-**Settings → Chat → Filters** (also the gear beside the chat tabs) offers hidden usernames, per-user repeat limits, selected/all-emote filtering, and ordered text rules with Block or Replace actions. Text rules include a live preview and capture groups. Filters start paused; enable them when ready. Changes save automatically across channels. Choose Hide or a muted red highlight for filtered messages. Pins and system notices remain visible, and replacement rules only change displayed text, preserving the original for replies and moderation.
+Open the gear beside the chat tabs for **Chat settings**, then choose **Chat → Filters** for hidden usernames, per-user repeat limits, selected/all-emote filtering, and ordered text rules with Block or Replace actions. Text rules include a live preview and capture groups. Filters start paused; enable them when ready. Changes save automatically across channels. Choose Hide or a muted red highlight for filtered messages. Pins and system notices remain visible, and replacement rules only change displayed text, preserving the original for replies and moderation.
 
 Pins sit directly below the chat tabs. Hover previews stay inside the chat pane, clear of the native video surface. User profiles open within the display's usable area, with an explicit close button and Escape support. Missing or failed avatars use local initials, and failed profile requests offer Retry.
+
+### Low latency playback
+
+Hover the bottom of the video and toggle **Low latency**. Green means enabled. The preference is saved across streams and app restarts; changing it reloads video while preserving quality, volume, mute and pause, without reconnecting chat. It starts disabled. Turn it off if your connection struggles to keep up, and use **Live** to return to the live edge after pausing.
+
+The toggle uses [MPV's low-latency profile](https://mpv.io/manual/master/#low-latency-playback), one second of read-ahead and [FFmpeg's HLS `live_start_index=-1`](https://ffmpeg.org/ffmpeg-formats.html#hls) to start at the newest complete segment instead of three segments back. Media still goes directly to MPV; the named pipe carries controls. This reduces player-side delay but does not guarantee a specific end-to-end latency or eliminate Kick's encoding/CDN delay. The loopback HLS test verifies a four-second improvement with two-second segments; it is not a measurement of Kick's live service.
 
 ## Development (PowerShell)
 
@@ -86,6 +92,7 @@ npm run lint
 npm test
 npm run build
 npm run test:desktop
+npm run test:player
 npm run test:native
 npm run build:win
 npm run verify:package
