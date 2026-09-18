@@ -43,6 +43,16 @@
   scroll-behavior: auto;
 }
 
+.rh-filter-warning {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-primary);
+}
+
 .chatVirtuoso {
   margin-bottom: 4px;
 }

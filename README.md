@@ -49,6 +49,8 @@ The window title shows the current channel and stream title. Chat tools sit besi
 
 Open the gear beside the chat tabs for **Chat settings**, then choose **Chat → Filters** for hidden usernames, per-user repeat limits, selected/all-emote filtering, and ordered text rules with Block or Replace actions. Text rules include a live preview and capture groups. Filters start paused; enable them when ready. Changes save automatically across channels. Choose Hide or a muted red highlight for filtered messages. Pins and system notices remain visible, and replacement rules only change displayed text, preserving the original for replies and moderation.
 
+Custom text rules and their previews run in a separate worker with a 500 ms processing limit. If a rule takes too long, Roundhouse pauses it for the current view and shows its rule number; chat and the remaining rules continue. Edit the text rules to retry. Saved rules are never deleted by this safeguard.
+
 Pins sit directly below the chat tabs. Hover previews stay inside the chat pane, clear of the native video surface. User profiles open within the display's usable area, with an explicit close button and Escape support. Missing or failed avatars use local initials, and failed profile requests offer Retry.
 
 Chat keeps the latest visible message at the bottom as history rolls over, filters hide rows, emotes load, or the pane resizes. Scrolling up with the wheel, keyboard, touch, or scrollbar pauses following so you can read. **Scroll To Bottom**, End, or scrolling back to the bottom resumes following.

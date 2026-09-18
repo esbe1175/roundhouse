@@ -3,7 +3,7 @@ import { Virtuoso } from "react-virtuoso";
 import useChatFollow from "./useChatFollow";
 import Message from "./Message";
 import MouseScroll from "../../assets/icons/mouse-scroll-fill.svg?asset";
-import { FilterSession } from "../../../../../utils/chat-filters.mjs";
+import useChatFilters from "../../utils/useChatFilters";
 
 const MessagesHandler = memo(
   ({
@@ -22,12 +22,10 @@ const MessagesHandler = memo(
     const virtuosoRef = useRef(null);
     const chatContainerRef = useRef(null);
     const [silencedUserIds, setSilencedUserIds] = useState(new Set());
-    const filters = useRef({ room: chatroomId, session: new FilterSession() });
 
-    const filteredMessages = useMemo(() => {
+    const visibleMessages = useMemo(() => {
       if (!messages?.length) return [];
 
-      if (filters.current.room !== chatroomId) filters.current = { room: chatroomId, session: new FilterSession() };
       const visible = messages.filter((message) => {
         if (message?.chatroom_id != chatroomId) return false;
         if (message?.type === "mod_action") return !!settings?.chatrooms?.showModActions;
@@ -36,7 +34,7 @@ const MessagesHandler = memo(
 
         return message?.sender?.id && !silencedUserIds.has(message?.sender?.id);
       });
-      return filters.current.session.apply(visible, settings?.chatFilters, allStvEmotes);
+      return visible;
     }, [
       messages,
       chatroomId,
@@ -45,6 +43,12 @@ const MessagesHandler = memo(
       settings?.chatrooms?.showModActions,
       allStvEmotes,
     ]);
+    const { messages: filteredMessages, warning } = useChatFilters(
+      visibleMessages,
+      settings?.chatFilters,
+      allStvEmotes,
+      chatroomId,
+    );
 
     const follow = useChatFollow(chatroomId, filteredMessages, virtuosoRef);
 
@@ -128,6 +132,11 @@ const MessagesHandler = memo(
         ref={chatContainerRef}
         data-chatroom-id={chatroomId}
       >
+        {warning && (
+          <div className="rh-filter-warning" role="status">
+            {warning}
+          </div>
+        )}
         <Virtuoso
           ref={virtuosoRef}
           data={filteredMessages}

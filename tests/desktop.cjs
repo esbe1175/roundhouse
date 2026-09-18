@@ -391,7 +391,8 @@ const assert = require("node:assert/strict");
     await page.keyboard.press("Enter");
     assert.equal(await app.evaluate(() => global.roundhouseTestMessages.length), 1);
     await require("./chat-ui.cjs")({ app, page, errors });
-    await require("./chat-follow.cjs")({ page, getSocket: () => kickSocket });
+      await require("./chat-follow.cjs")({ page, getSocket: () => kickSocket });
+      await require("./chat-freeze.cjs")({ app, page, getSocket: () => kickSocket, hoverEdge, errors });
     // Roundhouse owns its playback settings; chat settings remain separate.
     await expect(page.locator(".rh-ambient")).toBeVisible({ timeout: 10000 });
     const morph = await page.locator(".rh-ambient").evaluate((el) => {

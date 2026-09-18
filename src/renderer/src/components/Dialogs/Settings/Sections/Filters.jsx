@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Switch } from "../../../Shared/Switch";
-import { DEFAULTS, execProtected, replaceProtected } from "../../../../../../../utils/chat-filters.mjs";
+import { DEFAULTS } from "../../../../../../../utils/chat-filters.mjs";
+import { useFilterWorker } from "../../../../utils/useChatFilters";
 import "../../../../assets/styles/dialogs/Filters.scss";
 
 function Toggle({ title, description, checked, onChange }) {
@@ -62,8 +63,8 @@ export default function Filters({ settingsData, onChange }) {
     [next[index], next[index + offset]] = [next[index + offset], next[index]];
     change({ regexRules: next });
   };
-  let previewText = sample,
-    previewBlocked = false;
+  const previewTask = useMemo(() => ({ kind: "preview", sample, settings: { regexRules: rules } }), [sample, rules]);
+  const preview = useFilterWorker(previewTask, "filter-preview");
   return (
     <section className="rh-filters">
       <div className="settingsSectionHeader">
@@ -211,35 +212,17 @@ export default function Filters({ settingsData, onChange }) {
             </label>
             <div className="rh-filter-rules">
               {rules.map((rule, index) => {
-                let status = "Enter a pattern",
+                const current = preview?.task === previewTask;
+                const paused = current && preview.paused?.includes(index + 1);
+                const {
+                  status,
                   captures = [],
-                  error = false;
-                try {
-                  if (rule.pattern) {
-                    const regex = new RegExp(rule.pattern, rule.flags ?? "iu");
-                    const match = execProtected(previewText, regex);
-                    status = previewBlocked
-                      ? "Skipped — blocked by an earlier rule"
-                      : !sample
-                        ? "Ready to test"
-                        : match
-                          ? "Matched"
-                          : "No match";
-                    if (!previewBlocked && match) {
-                      captures = match.slice(1);
-                      if (rule.action === "block") {
-                        previewBlocked = true;
-                        status = "Blocked";
-                      } else {
-                        previewText = replaceProtected(previewText, regex, rule.replacement);
-                        status = `Result: ${previewText}`;
-                      }
-                    }
-                  }
-                } catch (e) {
-                  error = true;
-                  status = e.message;
-                }
+                  error = false,
+                } = paused
+                  ? { status: "Took too long — paused. Edit this rule to retry.", error: true }
+                  : current && preview.error
+                    ? { status: preview.error, error: true }
+                    : (current && preview.result?.[index]) || { status: "Checking…" };
                 return (
                   <div className="rh-filter-rule" key={index}>
                     <div className="rh-filter-rule-heading">

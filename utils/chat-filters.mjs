@@ -71,7 +71,12 @@ function execProtected(value, regex) {
       .replace(/\[emote:\d+:[^\]]+\]/g, "")
       .trim();
     if (original) return match;
-    if (match[0] === "") iterator.lastIndex++;
+    if (match[0] === "") {
+      // Unicode regexes rewind a lastIndex inside a surrogate pair. Advance a
+      // whole code point or an empty match can loop forever on an emoji.
+      const point = masked.codePointAt(iterator.lastIndex);
+      iterator.lastIndex += (iterator.unicode || iterator.unicodeSets) && point > 0xffff ? 2 : 1;
+    }
   }
   return null;
 }
@@ -128,6 +133,7 @@ class FilterEngine {
     let replaced = false;
     if (s.regexEnabled) {
       for (const entry of this.regexes) {
+        this.onRule?.(entry.rule);
         const match = execProtected(outputText, entry.regex);
         if (!match) continue;
         if (entry.rule.action === "block")
@@ -172,7 +178,7 @@ export class FilterSession {
   constructor() {
     this.cache = new Map();
   }
-  apply(messages, settings, emoteSets = []) {
+  apply(messages, settings, emoteSets = [], onRule) {
     const emoteNames = new Set(emoteSets.flatMap((set) => set.emotes || []).map((emote) => emote.name));
     const key = JSON.stringify([settings, [...emoteNames].sort()]);
     if (key !== this.key) {
@@ -180,6 +186,7 @@ export class FilterSession {
       this.engine = new FilterEngine(settings);
       this.cache.clear();
     }
+    this.engine.onRule = onRule;
     const retained = new Set(messages.map((message) => message.id));
     for (const id of this.cache.keys()) if (!retained.has(id)) this.cache.delete(id);
     const result = [];
