@@ -62,7 +62,7 @@ const Settings = () => {
       if (e.key === "Enter" && value.length > 0) {
         changeSetting("notifications", {
           ...settings?.notifications,
-          phrases: [...settings?.notifications?.phrases, value],
+          phrases: [...(settings?.notifications?.phrases || []), value],
         });
         e.target.value = "";
       }

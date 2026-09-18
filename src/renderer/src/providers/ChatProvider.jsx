@@ -22,7 +22,7 @@ let memoryCleanupInterval = null;
 
 // Load initial state from local storage
 const getInitialState = () => {
-  const savedChatrooms = JSON.parse(localStorage.getItem("chatrooms")) || [];
+  const savedChatrooms = [];
   const savedMentionsTab = localStorage.getItem("hasMentionsTab") === "true";
   const savedPersonalEmoteSets = JSON.parse(localStorage.getItem("stvPersonalEmoteSets")) || [];
 
@@ -97,8 +97,8 @@ const useChatStore = create((set, get) => ({
       return;
     }
 
-    const authTokens = window.app.auth.getToken();
-    if (!authTokens?.token || !authTokens?.session) {
+    const signedIn = window.app.auth.isSignedIn();
+    if (!signedIn) {
       console.log("[7tv Presence]: No auth tokens available, skipping presence update");
       return;
     }
@@ -265,8 +265,8 @@ const useChatStore = create((set, get) => ({
       console.log("7TV WebSocket connected for chatroom:", chatroom.id);
 
       setTimeout(() => {
-        const authTokens = window.app.auth.getToken();
-        if (storeStvId && authTokens?.token && authTokens?.session) {
+        const signedIn = window.app.auth.isSignedIn();
+        if (storeStvId && signedIn) {
           sendUserPresence(storeStvId, chatroom.streamerData.user_id);
           stvPresenceUpdates.set(chatroom.streamerData.user_id, Date.now());
         } else {
@@ -284,6 +284,8 @@ const useChatStore = create((set, get) => ({
   connectToChatroom: async (chatroom) => {
     if (!chatroom?.id) return;
     const pusher = new KickPusher(chatroom.id, chatroom.streamerData.id);
+    // Register before any await so Back can close an in-flight connection.
+    set(state => ({ connections: { ...state.connections, [chatroom.id]: { ...state.connections[chatroom.id], kickPusher: pusher } } }));
 
     // Connection Events
     pusher.addEventListener("connection", (event) => {
@@ -459,6 +461,7 @@ const useChatStore = create((set, get) => ({
 
     if (pusher.chat.OPEN) {
       const channel7TVEmotes = await window.app.stv.getChannelEmotes(chatroom.streamerData.user_id);
+      if (!get().chatrooms.some(room => room.id === chatroom.id)) { pusher.close(); return; }
 
       if (channel7TVEmotes) {
         const seenEmoteNames = new Set();
@@ -510,7 +513,7 @@ const useChatStore = create((set, get) => ({
       }));
     };
 
-    fetchInitialUserChatroomInfo();
+    fetchInitialUserChatroomInfo().catch(error => console.warn('Chat membership unavailable:', error.message));
 
     const fetchEmotes = async () => {
       console.log("[Kick Emotes]: Fetching emotes for chatroom:", chatroom?.streamerData?.slug);
@@ -549,7 +552,7 @@ const useChatStore = create((set, get) => ({
       sevenTVEmoteNames.clear();
     };
 
-    fetchEmotes();
+    fetchEmotes().catch(error => console.warn('Channel emotes unavailable:', error.message));
 
     // Fetch Initial Chatroom Info
     const fetchInitialChatroomInfo = async () => {
@@ -561,6 +564,7 @@ const useChatStore = create((set, get) => ({
       }
 
       const currentChatroom = get().chatrooms.find((room) => room.id === chatroom.id);
+      if (!currentChatroom) return;
       const updatedChatroom = {
         ...currentChatroom,
         initialChatroomInfo: response.data,
@@ -588,7 +592,7 @@ const useChatStore = create((set, get) => ({
       localStorage.setItem("chatrooms", JSON.stringify(updatedChatrooms));
     };
 
-    fetchInitialChatroomInfo();
+    fetchInitialChatroomInfo().catch(error => console.warn('Chatroom details unavailable:', error.message));
 
     // Fetch initial messages
     const fetchInitialMessages = async () => {
@@ -614,7 +618,7 @@ const useChatStore = create((set, get) => ({
       }
     };
 
-    fetchInitialMessages();
+    fetchInitialMessages().catch(error => console.warn('Chat history unavailable:', error.message));
 
     const fetchInitialPollInfo = async () => {
       const response = await window.app.kick.getInitialPollInfo(chatroom?.streamerData?.slug);
@@ -633,7 +637,7 @@ const useChatStore = create((set, get) => ({
       }
     };
 
-    fetchInitialPollInfo();
+    fetchInitialPollInfo().catch(error => console.warn('Poll information unavailable:', error.message));
 
     set((state) => ({
       connections: {
@@ -1177,7 +1181,7 @@ const useChatStore = create((set, get) => ({
       }));
 
       // Connect to chatroom
-      get().connectToChatroom(newChatroom);
+        get().connectToChatroom(newChatroom).catch(error => console.warn('Chat connection failed:', error.message));
 
       // Connect to 7TV WebSocket
       get().connectToStvWebSocket(newChatroom);
@@ -2068,7 +2072,7 @@ const useChatStore = create((set, get) => ({
 
 if (window.location.pathname === "/" || window.location.pathname.endsWith("index.html")) {
   // Initialize connections when the store is created
-  useChatStore.getState().initializeConnections();
+  // Connections are started explicitly when opening a followed channel.
 
   // Initialize presence updates when the store is created
   let presenceUpdatesInterval = null;
@@ -2082,9 +2086,9 @@ if (window.location.pathname === "/" || window.location.pathname.endsWith("index
       console.log("[7tv Presence]: No 7TV ID found, skipping presence update checks");
       setTimeout(() => {
         storeStvId = localStorage.getItem("stvId");
-        const authTokens = window.app.auth.getToken();
+        const signedIn = window.app.auth.isSignedIn();
 
-        if (storeStvId && authTokens?.token && authTokens?.session) {
+        if (storeStvId && signedIn) {
           initializePresenceUpdates();
         } else {
           console.log("[7tv Presence]: No STV ID or auth tokens found after delay");
@@ -2095,8 +2099,8 @@ if (window.location.pathname === "/" || window.location.pathname.endsWith("index
     }
 
     // Check for auth tokens before starting presence updates
-    const authTokens = window.app.auth.getToken();
-    if (!authTokens?.token || !authTokens?.session) {
+    const signedIn = window.app.auth.isSignedIn();
+    if (!signedIn) {
       console.log("[7tv Presence]: No auth tokens available, skipping presence update initialization");
       return;
     }

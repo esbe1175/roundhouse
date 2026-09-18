@@ -181,7 +181,7 @@ const Message = ({
 
       let emoteData = null;
       if (src.includes("7tv.app")) {
-        const match = src.match(/\/emote\/([^\/]+)\//);
+        const match = src.match(/\/emote\/([^/]+)\//);
         if (match) {
           emoteData = {
             id: match[1],
@@ -190,7 +190,7 @@ const Message = ({
           };
         }
       } else if (src.includes("kick.com/emotes")) {
-        const match = src.match(/\/emotes\/([^\/]+)/);
+        const match = src.match(/\/emotes\/([^/]+)/);
         if (match) {
           emoteData = {
             id: match[1],

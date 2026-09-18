@@ -6,6 +6,7 @@ import CloseIcon from "../../assets/icons/x-bold.svg?asset";
 import TrashIcon from "../../assets/icons/trash-fill.svg?asset";
 import TrophyIcon from "../../assets/icons/trophy.svg?asset";
 import duration from "dayjs/plugin/duration";
+import useChatStore from "../../providers/ChatProvider";
 
 dayjs.extend(duration);
 
@@ -33,8 +34,6 @@ const Poll = memo(
     //   voted_option_id: null,
     // });
 
-    if (!pollDetails?.title) return null;
-
     const [poll, setPoll] = useState(pollDetails);
     const [percentRemaining, setPercentRemaining] = useState(0);
 
@@ -51,8 +50,23 @@ const Poll = memo(
 
     const intervalTimerRef = useRef(null);
 
-    const totalVotes = pollDetails?.options.reduce((sum, option) => sum + option.votes, 0);
+    const totalVotes = pollDetails?.options?.reduce((sum, option) => sum + option.votes, 0) || 0;
     const calculatePercentage = (votes) => (totalVotes === 0 ? 0 : (votes / totalVotes) * 100);
+    const [voteError, setVoteError] = useState('');
+    const handleVote = async (optionId) => {
+      if (optionId === null || hasVoted || isPollEnded) return;
+      const room = useChatStore.getState().chatrooms.find(room => room.id === chatroomId);
+      try {
+        await window.app.kick.getSubmitPollVote(room.slug, optionId);
+        setHasVoted(true); setVoteError('');
+      } catch (error) { setVoteError(error.message); }
+    };
+    useEffect(() => {
+      if (!pollDetails?.duration) return;
+      const deadline = Date.now() + Math.max(0, pollDetails.remaining || 0) * 1000;
+      const update = () => setPercentRemaining(Math.max(0, Math.min(100, (deadline - Date.now()) / (pollDetails.duration * 10))));
+      update(); const timer = setInterval(update, 1000); return () => clearInterval(timer);
+    }, [pollDetails]);
 
     // const handleVote = async (optionId) => {
     //   if (hasVoted || pollWinner) return;
@@ -164,6 +178,7 @@ const Poll = memo(
       // };
     }, [pollDetails]);
 
+    if (!pollDetails?.title) return null;
     return (
       <div className={clsx("poll", showPollMessage && !showChatters && "open", isPollExpanded && "expanded")}>
         <div className="pollHeader">
@@ -184,11 +199,6 @@ const Poll = memo(
             <button onClick={() => setShowPollMessage(!showPollMessage)}>
               <img src={CloseIcon} width={14} height={14} alt="Close Poll" />
             </button>
-            {canModerate && (
-              <button onClick={modDeletePoll}>
-                <img src={TrashIcon} width={14} height={14} alt="Delete Poll" />
-              </button>
-            )}
           </div>
         </div>
         <div className={clsx("pollOptions", hasVoted && "pollOptionsVoted", pollWinner && "pollOptionsWinner")}>
@@ -240,6 +250,7 @@ const Poll = memo(
           })}
         </div>
         <div className={"pollFooter"}>
+          {voteError && <span role="alert">{voteError}</span>}
           {!hasVoted && percentRemaining > 0 && (
             <button className="pollVoteButton" onClick={() => handleVote(selectedOption)}>
               Submit

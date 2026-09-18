@@ -523,7 +523,7 @@ const NotificationsSection = ({ settingsData, onChange }) => {
       if (e.key === "Enter" && value.length > 0) {
         onChange("notifications", {
           ...settingsData?.notifications,
-          phrases: [...settingsData?.notifications?.phrases, value],
+          phrases: [...(settingsData?.notifications?.phrases || []), value],
         });
         e.target.value = "";
       }

@@ -209,6 +209,11 @@ class KickPusher extends EventTarget {
   close() {
     console.log(`Closing connection for chatroom ${this.chatroomNumber}`);
     this.shouldReconnect = false;
+    if (this.chat?.readyState === WebSocket.CONNECTING) {
+      this.chat.close();
+      this.chat = null;
+      return;
+    }
 
     if (this.chat && this.chat.readyState === WebSocket.OPEN) {
       try {

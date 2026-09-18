@@ -8,8 +8,8 @@ const AboutSection = ({ appInfo }) => {
     <div className="settingsContentAbout">
       <div className="settingsContentSection">
         <div className="settingsSectionHeader">
-          <h4>About KickTalk</h4>
-          <p>A chat client for Kick.com.</p>
+          <h4>About Roundhouse</h4>
+          <p>A personal stream viewer built from KickTalk, with an embedded MPV player. Original KickTalk creators:</p>
         </div>
 
         <div className="settingsContentAboutDevsContainer">
