@@ -1,29 +1,17 @@
 const { app, shell, BrowserWindow, ipcMain, screen, session, Tray, dialog } = require("electron");
 import { join, basename } from "path";
 import { electronApp, optimizer } from "@electron-toolkit/utils";
-import { update } from "./utils/update";
-import Store from "electron-store";
+import { setupRoundhouse, account, player, installIPCGuard, openWebLink } from "./roundhouse";
+
 import store from "../../utils/config";
 import fs from "fs";
-import dotenv from "dotenv";
-dotenv.config();
+installIPCGuard();
 
 const isDev = process.env.NODE_ENV === "development";
-const iconPath = process.platform === "win32" 
-  ? join(__dirname, "../../resources/icons/win/KickTalk_v1.ico")
-  : join(__dirname, "../../resources/icons/KickTalk_v1.png");
+const iconRoot = app.isPackaged ? join(process.resourcesPath, "app.asar.unpacked/resources/icons") : join(__dirname, "../../resources/icons");
+const iconPath = process.platform === "win32" ? join(iconRoot, "win/KickTalk_v1.ico") : join(iconRoot, "KickTalk_v1.png");
 
-const authStore = new Store({
-  fileExtension: "env",
-  schema: {
-    SESSION_TOKEN: {
-      type: "string",
-    },
-    KICK_SESSION: {
-      type: "string",
-    },
-  },
-});
+
 
 ipcMain.setMaxListeners(100);
 
@@ -37,37 +25,6 @@ const logLimits = {
 };
 
 let tray = null;
-
-const storeToken = async (token_name, token) => {
-  if (!token || !token_name) return;
-
-  try {
-    authStore.set(token_name, token);
-  } catch (error) {
-    console.error("[Auth Token]: Error storing token:", error);
-  }
-};
-
-const retrieveToken = async (token_name) => {
-  try {
-    const token = await authStore.get(token_name);
-    return token || null;
-  } catch (error) {
-    console.error("[Auth Token]: Error retrieving token:", error);
-    return null;
-  }
-};
-
-const clearAuthTokens = async () => {
-  try {
-    authStore.clear();
-    await session.defaultSession.clearStorageData({
-      storages: ["cookies"],
-    });
-  } catch (error) {
-    console.error("[Auth Token]: Error clearing tokens & cookies:", error);
-  }
-};
 
 let dialogInfo = null;
 let replyThreadInfo = null;
@@ -223,7 +180,7 @@ ipcMain.handle("store:set", (e, { key, value }) => {
     }
 
     // Handle auto-update setting changes
-    if (value.hasOwnProperty('autoUpdate') && value.autoUpdate === false) {
+      if (Object.hasOwn(value, 'autoUpdate') && value.autoUpdate === false) {
       // Dismiss any active update notifications when auto-update is disabled
       mainWindow.webContents.send("autoUpdater:dismiss");
     }
@@ -241,7 +198,7 @@ ipcMain.handle("store:delete", (e, { key }) => {
 
 const addUserLog = (chatroomId, userId, message, isDeleted = false) => {
   if (!chatroomId || !userId || !message) {
-    console.error("[Chat Logs]: Invalid data received:", data);
+    console.error("[Chat Logs]: Missing chatroom, user, or message.");
     return null;
   }
 
@@ -280,7 +237,7 @@ const addUserLog = (chatroomId, userId, message, isDeleted = false) => {
 
 const addReplyLog = (chatroomId, message, isDeleted = false) => {
   if (!message || !chatroomId || !message.metadata?.original_message?.id) {
-    console.error("[Reply Logs]: Invalid data received:", data);
+    console.error("[Reply Logs]: Missing reply metadata.");
     return null;
   }
 
@@ -435,12 +392,12 @@ const setAlwaysOnTop = (window) => {
 
 const createWindow = () => {
   mainWindow = new BrowserWindow({
-    width: store.get("lastMainWindowState.width"),
-    height: store.get("lastMainWindowState.height"),
+    width: Math.max(1000, store.get("lastMainWindowState.width")),
+    height: Math.max(640, store.get("lastMainWindowState.height")),
     x: store.get("lastMainWindowState.x"),
     y: store.get("lastMainWindowState.y"),
-    minWidth: 335,
-    minHeight: 250,
+    minWidth: 900,
+    minHeight: 540,
     show: false,
     backgroundColor: "#06190e",
     autoHideMenuBar: true,
@@ -452,7 +409,7 @@ const createWindow = () => {
       nodeIntegration: false,
       contextIsolation: true,
       preload: join(__dirname, "../preload/index.js"),
-      sandbox: false,
+      sandbox: true,
       backgroundThrottling: false,
     },
   });
@@ -473,7 +430,7 @@ const createWindow = () => {
     setAlwaysOnTop(mainWindow);
 
     if (isDev) {
-      mainWindow.webContents.openDevTools({ mode: "detach" });
+      // Open developer tools manually with F12.
     }
   });
 
@@ -486,7 +443,7 @@ const createWindow = () => {
   });
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url);
+    void openWebLink(details.url).catch(() => {});
     return { action: "deny" };
   });
 
@@ -499,107 +456,6 @@ const createWindow = () => {
   } else {
     mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
   }
-};
-
-const loginToKick = async (method) => {
-  const authSession = {
-    token: await retrieveToken("SESSION_TOKEN"),
-    session: await retrieveToken("KICK_SESSION"),
-  };
-
-  if (authSession.token && authSession.session) return true;
-
-  const mainWindowPos = mainWindow.getPosition();
-  const mainWindowSize = mainWindow.getSize();
-
-  const newX = mainWindowPos[0] + Math.round((mainWindowSize[0] - 1400) / 2);
-  const newY = mainWindowPos[1] + Math.round((mainWindowSize[1] - 750) / 2);
-
-  return new Promise((resolve) => {
-    const loginDialog = new BrowserWindow({
-      width: 460,
-      height: 630,
-      x: newX,
-      y: newY,
-      show: true,
-      resizable: false,
-      transparent: true,
-      autoHideMenuBar: true,
-      parent: authDialog,
-      roundedCorners: true,
-      icon: iconPath,
-      webPreferences: {
-        autoplayPolicy: "user-gesture-required",
-        nodeIntegration: false,
-        contextIsolation: true,
-        sandbox: false,
-      },
-    });
-
-    switch (method) {
-      case "kick":
-        loginDialog.loadURL("https://kick.com/");
-        loginDialog.webContents.on("did-finish-load", () => {
-          loginDialog.webContents.executeJavaScript(
-            `const interval = setInterval(() => {
-              const el = document.querySelector('div.flex.items-center.gap-4 > button:last-child');
-              if (el) {
-                el.click();
-                clearInterval(interval);  
-              }
-            }, 100);`,
-          );
-          loginDialog.webContents.setAudioMuted(true);
-        });
-        break;
-      case "google":
-        loginDialog.loadURL(
-          "https://accounts.google.com/o/oauth2/auth?client_id=582091208538-64t6f8i044gppt1etba67qu07t4fimuf.apps.googleusercontent.com&redirect_uri=https%3A%2F%2Fkick.com%2Fsocial%2Fgoogle%2Fcallback&scope=openid+profile+email&response_type=code",
-        );
-        break;
-      case "apple":
-        loginDialog.loadURL(
-          "https://appleid.apple.com/auth/authorize?client_id=com.kick&redirect_uri=https%3A%2F%2Fkick.com%2Fredirect%2Fapple&scope=name%20email&response_type=code&response_mode=form_post",
-        );
-        break;
-      default:
-        console.error("[Auth Login]:Unknown login method:", method);
-    }
-
-    const checkForSessionToken = async () => {
-      const cookies = await session.defaultSession.cookies.get({ domain: "kick.com" });
-      const sessionCookie = cookies.find((cookie) => cookie.name === "session_token");
-      const kickSession = cookies.find((cookie) => cookie.name === "kick_session");
-      if (sessionCookie && kickSession) {
-        // Save the session token and kick session to the .env file
-        const sessionToken = decodeURIComponent(sessionCookie.value);
-        const kickSessionValue = decodeURIComponent(kickSession.value);
-
-        await storeToken("SESSION_TOKEN", sessionToken);
-        await storeToken("KICK_SESSION", kickSessionValue);
-
-        loginDialog.close();
-        authDialog.close();
-        mainWindow.webContents.reload();
-
-        resolve(true);
-        return true;
-      }
-
-      return false;
-    };
-
-    const interval = setInterval(async () => {
-      if (await checkForSessionToken()) {
-        clearInterval(interval);
-      }
-    }, 1000);
-
-    loginDialog.on("closed", () => {
-      clearInterval(interval);
-      resolve(false);
-    });
-  });
 };
 
 const setupLocalShortcuts = () => {
@@ -662,7 +518,7 @@ const setupLocalShortcuts = () => {
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
   tray = new Tray(iconPath);
-  tray.setToolTip("KickTalk");
+  tray.setToolTip("Roundhouse");
 
   // Set the icon for the app
   if (process.platform === "win32") {
@@ -670,7 +526,7 @@ app.whenReady().then(() => {
   }
 
   // Set app user model id for windows
-  electronApp.setAppUserModelId("com.kicktalk.app");
+  electronApp.setAppUserModelId("local.roundhouse.app");
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.
@@ -685,7 +541,7 @@ app.whenReady().then(() => {
   createWindow();
 
   // Initialize auto-updater
-  update(mainWindow);
+  setupRoundhouse(mainWindow);
 
   app.on("activate", function () {
     // On macOS it's common to re-create a window in the app when the
@@ -697,25 +553,11 @@ app.whenReady().then(() => {
   setupLocalShortcuts();
 });
 
-// Logout Handler
-ipcMain.handle("logout", () => {
-  dialog
-    .showMessageBox(settingsDialog, {
-      type: "question",
-      title: "Sign Out",
-      message: "Are you sure you want to sign out?",
-      buttons: ["Yes", "Cancel"],
-    })
-    // Dialog returns a promise so let's handle it correctly
-    .then((result) => {
-      if (result.response !== 0) return;
-
-      if (result.response === 0) {
-        clearAuthTokens();
-        mainWindow.webContents.reload();
-        settingsDialog.close();
-      }
-    });
+ipcMain.handle("logout", async () => {
+  await player.stop();
+  await account.logout();
+  for (const w of BrowserWindow.getAllWindows()) if (w !== mainWindow) w.close();
+  mainWindow.webContents.reload();
 });
 
 // User Dialog Handler
@@ -751,7 +593,7 @@ ipcMain.handle("userDialog:open", (e, { data }) => {
       nodeIntegration: false,
       contextIsolation: true,
       preload: join(__dirname, "../preload/index.js"),
-      sandbox: false,
+      sandbox: true,
     },
   });
 
@@ -771,7 +613,7 @@ ipcMain.handle("userDialog:open", (e, { data }) => {
 
     userDialog.webContents.send("userDialog:data", { ...data, pinned: false });
     userDialog.webContents.setWindowOpenHandler((details) => {
-      shell.openExternal(details.url);
+      void openWebLink(details.url).catch(() => {});
       return { action: "deny" };
     });
   });
@@ -803,77 +645,9 @@ ipcMain.handle("userDialog:pin", async (e, forcePinState) => {
   }
 });
 
-// Auth Dialog Handler
-ipcMain.handle("authDialog:open", (e) => {
-  const mainWindowPos = mainWindow.getPosition();
-  const currentDisplay = screen.getDisplayNearestPoint({
-    x: mainWindowPos[0],
-    y: mainWindowPos[1],
-  });
-  const newX = currentDisplay.bounds.x + Math.round((currentDisplay.bounds.width - 600) / 2);
-  const newY = currentDisplay.bounds.y + Math.round((currentDisplay.bounds.height - 750) / 2);
-
-  if (authDialog) {
-    authDialog.focus();
-    return;
-  }
-
-  authDialog = new BrowserWindow({
-    width: 600,
-    minHeight: 400,
-    x: newX,
-    y: newY,
-    show: true,
-    resizable: false,
-    frame: false,
-    transparent: true,
-    roundedCorners: true,
-    parent: mainWindow,
-    icon: iconPath,
-    webPreferences: {
-      devtools: true,
-      nodeIntegration: false,
-      contextIsolation: true,
-      preload: join(__dirname, "../preload/index.js"),
-      sandbox: false,
-    },
-  });
-
-  // Load the same URL as main window but with dialog hash
-  if (isDev && process.env["ELECTRON_RENDERER_URL"]) {
-    authDialog.loadURL(`${process.env["ELECTRON_RENDERER_URL"]}/auth.html`);
-  } else {
-    authDialog.loadFile(join(__dirname, "../renderer/auth.html"));
-  }
-
-  authDialog.once("ready-to-show", () => {
-    authDialog.show();
-    if (isDev) {
-      authDialog.webContents.openDevTools();
-    }
-  });
-
-  authDialog.on("closed", () => {
-    authDialog = null;
-  });
-});
-
-ipcMain.handle("authDialog:auth", async (e, { data }) => {
-  if (data.type) {
-    const result = await loginToKick(data.type);
-    if (result) {
-      authDialog.close();
-      authDialog = null;
-    }
-  }
-});
-
-ipcMain.handle("authDialog:close", () => {
-  if (authDialog) {
-    authDialog.close();
-    authDialog = null;
-  }
-});
+ipcMain.handle("authDialog:open", () => account.login(mainWindow));
+ipcMain.handle("authDialog:auth", () => account.login(mainWindow));
+ipcMain.handle("authDialog:close", () => account.closeLogin());
 
 ipcMain.handle("alwaysOnTop", () => {
   if (mainWindow) {
@@ -956,7 +730,7 @@ ipcMain.handle("chattersDialog:open", (e, { data }) => {
       nodeIntegration: false,
       contextIsolation: true,
       preload: join(__dirname, "../preload/index.js"),
-      sandbox: false,
+      sandbox: true,
     },
   });
 
@@ -1024,7 +798,7 @@ ipcMain.handle("searchDialog:open", (e, { data }) => {
       nodeIntegration: false,
       contextIsolation: true,
       preload: join(__dirname, "../preload/index.js"),
-      sandbox: false,
+      sandbox: true,
     },
   });
 
@@ -1043,7 +817,7 @@ ipcMain.handle("searchDialog:open", (e, { data }) => {
     if (data) {
       searchDialog.webContents.send("searchDialog:data", data);
       searchDialog.webContents.setWindowOpenHandler((details) => {
-        shell.openExternal(details.url);
+        void openWebLink(details.url).catch(() => {});
         return { action: "deny" };
       });
     }
@@ -1068,7 +842,7 @@ ipcMain.handle("searchDialog:close", () => {
 
 // Settings Dialog Handler
 ipcMain.handle("settingsDialog:open", async (e, { data }) => {
-  const settings = await store.get();
+  const settings = store.store;
 
   if (settingsDialog) {
     settingsDialog.focus();
@@ -1102,7 +876,7 @@ ipcMain.handle("settingsDialog:open", async (e, { data }) => {
       nodeIntegration: false,
       contextIsolation: true,
       preload: join(__dirname, "../preload/index.js"),
-      sandbox: false,
+      sandbox: true,
     },
   });
 
@@ -1122,7 +896,7 @@ ipcMain.handle("settingsDialog:open", async (e, { data }) => {
     }
 
     settingsDialog.webContents.setWindowOpenHandler((details) => {
-      shell.openExternal(details.url);
+      void openWebLink(details.url).catch(() => {});
       return { action: "deny" };
     });
   });
@@ -1180,7 +954,7 @@ ipcMain.handle("replyThreadDialog:open", (e, { data }) => {
       nodeIntegration: false,
       contextIsolation: true,
       preload: join(__dirname, "../preload/index.js"),
-      sandbox: false,
+      sandbox: true,
     },
   });
 

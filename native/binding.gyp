@@ -1,0 +1,1 @@
+{"targets":[{"target_name":"roundhouse_host","sources":["window.cc"],"defines":["NAPI_VERSION=8"],"libraries":["user32.lib"],"msvs_settings":{"VCCLCompilerTool":{"AdditionalOptions":["/std:c++17"]}}}]}

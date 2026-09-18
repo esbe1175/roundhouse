@@ -1,4 +1,4 @@
-import axios from "axios";
+import axios from "./kickTransport";
 const APIUrl = "https://kick.com";
 const KickTalkAPIUrl = "https://api.kicktalk.app";
 const rateLimitMap = new Map();
@@ -43,7 +43,7 @@ const getKickAuthForEvents = async (eventChannelName, socketId, sessionCookie, k
 
     return response?.data;
   } catch (error) {
-    console.error("[KickAPI]: Auth Token Retrieval Failed:", error);
+    console.error("Kick request failed:", error.message);
     throw error;
   }
 };
@@ -530,7 +530,7 @@ const getInitialPollInfo = async (channelName, sessionCookie, kickSession) => {
 };
 
 const getSubmitPollVote = async (channelName, optionId, sessionCookie, kickSession) => {
-  try {
+
     // https://kick.com/api/v2/channels/design/polls/vote
 
     const response = await axios.post(
@@ -549,9 +549,7 @@ const getSubmitPollVote = async (channelName, optionId, sessionCookie, kickSessi
     );
 
     return response.data;
-  } catch (error) {
-    throw error;
-  }
+
 };
 
 const getUserKickId = async (sessionCookie, kickSession) => {

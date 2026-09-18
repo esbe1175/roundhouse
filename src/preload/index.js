@@ -1,186 +1,96 @@
-import { contextBridge, ipcRenderer, shell, session } from "electron";
-import { electronAPI } from "@electron-toolkit/preload";
-import {
-  sendMessageToChannel,
-  sendReplyToChannel,
-  getChannelInfo,
-  getChannelChatroomInfo,
-  getKickEmotes,
-  getSelfInfo,
-  getUserChatroomInfo,
-  getSelfChatroomInfo,
-  getSilencedUsers,
-  getLinkThumbnail,
-  getInitialChatroomMessages,
-  getInitialPollInfo,
-  getSubmitPollVote,
-  getChatroomViewers,
-
-  // Mod Actions
-  getBanUser,
-  getUnbanUser,
-  getTimeoutUser,
-  getDeleteMessage,
-
-  // User Actions
-  getSilenceUser,
-  getUnsilenceUser,
-
-  // Pin
-  getPinMessage,
-  getUnpinMessage,
-
-  // Kick Auth for Events
-  getKickAuthForEvents,
-  getUpdateTitle,
-  getClearChatroom,
-} from "../../utils/services/kick/kickAPI";
-import { getUserStvProfile, getChannelEmotes } from "../../utils/services/seventv/stvAPI";
-
-import Store from "electron-store";
-
-const authStore = new Store({
-  fileExtension: "env",
-});
-
-// Get Silenced users and save the in local storage
-const saveSilencedUsers = async (sessionCookie, kickSession) => {
-  try {
-    if (!sessionCookie || !kickSession) {
-      console.log("[Silenced Users]: No session tokens available, skipping fetch");
-      return;
-    }
-
-    const response = await getSilencedUsers(sessionCookie, kickSession);
-    if (response.status === 200) {
-      const silencedUsers = response.data;
-      localStorage.setItem("silencedUsers", JSON.stringify(silencedUsers));
-      console.log("[Silenced Users]: Successfully loaded and saved to storage");
-    }
-  } catch (error) {
-    console.error("[Silenced Users]: Error fetching silenced users:", error);
+import { contextBridge, ipcRenderer } from "electron";
+const call = async (method, ...args) => {
+  const result = await ipcRenderer.invoke("roundhouse:call", method, args);
+  if (!result.ok) {
+    const error = new Error(result.error.message);
+    error.code = result.error.code;
+    error.response = { status: result.error.status, data: result.error.data };
+    throw error;
   }
-};
-const retrieveToken = (token_name) => {
-  return authStore.get(token_name);
+  return result.value;
 };
 
-const authSession = {
-  token: retrieveToken("SESSION_TOKEN"),
-  session: retrieveToken("KICK_SESSION"),
-};
-
-// Validate Session Token by Fetching User Data
-const validateSessionToken = async () => {
-  if (!authSession.token || !authSession.session) {
-    console.log("[Session Validation]: No session tokens available");
-    authStore.clear();
-    localStorage.clear();
-    return false;
-  }
-
-  try {
-    // Get Kick ID and Username
-    const { data } = await getSelfInfo(authSession.token, authSession.session);
-
-    if (!data?.id) {
-      console.warn("[Session Validation]: No user data received");
-      authStore.clear();
-      localStorage.clear();
-
-      return false;
-    }
-
-    const kickId = localStorage.getItem("kickId");
-    const kickUsername = localStorage.getItem("kickUsername");
-
-    if (data?.streamer_channel?.user_id) {
-      if (!kickId || kickId !== data?.streamer_channel?.user_id) {
-        localStorage.setItem("kickId", data.streamer_channel.user_id);
-      }
-
-      if (!kickUsername || kickUsername?.toLowerCase() !== data?.streamer_channel?.slug?.toLowerCase()) {
-        localStorage.setItem("kickUsername", data.streamer_channel.slug);
-      }
-    }
-
-    // Get STV ID with error handling
-    try {
-      const stvData = await getUserStvProfile(data.id);
-      console.log("[Session Validation]: STV Data:", stvData);
-      const personalEmoteSets = stvData?.emoteSets?.filter((set) => set.type === "personal");
-      if (stvData) {
-        localStorage.setItem("stvId", stvData.user_id);
-        localStorage.setItem("stvPersonalEmoteSets", JSON.stringify(personalEmoteSets));
-        console.log("[Session Validation]: Updated stvId and stvPersonalEmoteSets");
-      }
-    } catch (stvError) {
-      console.warn("[Session Validation]: Failed to get STV ID:", stvError);
-    }
-
-    console.log("[Session Validation]: Session validated successfully");
-    return true;
-  } catch (error) {
-    console.error("Error validating session token:", error);
-    return false;
-  }
-};
-
-// Enhanced token management
+const sendMessageToChannel = (...args) => call("sendMessageToChannel", ...args);
+const sendReplyToChannel = (...args) => call("sendReplyToChannel", ...args);
+const getChannelInfo = (...args) => call("getChannelInfo", ...args);
+const getChannelChatroomInfo = (...args) => call("getChannelChatroomInfo", ...args);
+const getKickEmotes = (...args) => call("getKickEmotes", ...args);
+const getSelfInfo = (...args) => call("getSelfInfo", ...args);
+const getUserChatroomInfo = (...args) => call("getUserChatroomInfo", ...args);
+const getSelfChatroomInfo = (...args) => call("getSelfChatroomInfo", ...args);
+const getSilencedUsers = (...args) => call("getSilencedUsers", ...args);
+const getInitialChatroomMessages = (...args) => call("getInitialChatroomMessages", ...args);
+const getInitialPollInfo = (...args) => call("getInitialPollInfo", ...args);
+const getSubmitPollVote = (...args) => call("getSubmitPollVote", ...args);
+const getChatroomViewers = (...args) => call("getChatroomViewers", ...args);
+const getBanUser = (...args) => call("getBanUser", ...args);
+const getUnbanUser = (...args) => call("getUnbanUser", ...args);
+const getTimeoutUser = (...args) => call("getTimeoutUser", ...args);
+const getDeleteMessage = (...args) => call("getDeleteMessage", ...args);
+const getSilenceUser = (...args) => call("getSilenceUser", ...args);
+const getUnsilenceUser = (...args) => call("getUnsilenceUser", ...args);
+const getPinMessage = (...args) => call("getPinMessage", ...args);
+const getUnpinMessage = (...args) => call("getUnpinMessage", ...args);
+const getKickAuthForEvents = (...args) => call("getKickAuthForEvents", ...args);
+const getChannelEmotes = (...args) => call("getChannelEmotes", ...args);
+const withAuth = (fn) => fn(undefined, undefined);
+let signedIn = false;
 const tokenManager = {
-  async isValidToken() {
-    return await validateSessionToken();
+  isValidToken: async () => {
+    const state = await call("account");
+    signedIn = !!state.user;
+    return signedIn;
   },
-
-  getToken() {
-    return {
-      token: authStore.get("SESSION_TOKEN"),
-      session: authStore.get("KICK_SESSION"),
-    };
-  },
-
-  clearTokens() {
-    authStore.delete("SESSION_TOKEN");
-    authStore.delete("KICK_SESSION");
-  },
+  clearTokens: () => ipcRenderer.invoke("logout"),
 };
-
-// Check Auth for API calls that require it
-const withAuth = async (func) => {
-  if (!authSession.token || !authSession.session) {
-    console.warn("Unauthorized: No token or session found");
-    return null;
+const initialize = async () => {
+  const state = await call("account");
+  signedIn = !!state.user;
+  if (state.user) {
+    localStorage.setItem("kickId", state.user.id);
+    localStorage.setItem("kickUsername", state.user.username);
+    try {
+      const profile = await call("getUserStvProfile", state.user.id);
+      if (profile) {
+        localStorage.setItem("stvId", profile.user_id);
+        localStorage.setItem(
+          "stvPersonalEmoteSets",
+          JSON.stringify(profile.emoteSets?.filter((s) => s.type === "personal") || []),
+        );
+      }
+    } catch {}
+    try {
+      const response = await getSilencedUsers();
+      localStorage.setItem("silencedUsers", JSON.stringify(response.data));
+    } catch {}
+  } else {
+    for (const key of ["kickId", "kickUsername", "stvId", "stvPersonalEmoteSets", "silencedUsers", "chatrooms"])
+      localStorage.removeItem(key);
   }
-
-  return func(authSession.token, authSession.session);
+  return state;
 };
-
-// Initialize with error handling
-const initializePreload = async () => {
-  try {
-    console.log("[Preload]: Starting initialization...");
-
-    // Validate session
-    const isValidSession = await validateSessionToken();
-
-    if (isValidSession) {
-      await saveSilencedUsers(authSession.token, authSession.session);
-    } else {
-      console.log("[Preload]: Session invalid, skipping user-specific data");
-    }
-
-    console.log("[Preload]: Initialization complete");
-  } catch (error) {
-    console.error("[Preload]: Initialization failed:", error);
-  }
+const ready = initialize().catch((error) => ({ user: null, error: error.message }));
+const subscribe = (event, callback) => {
+  const handler = (_, data) => callback(data);
+  ipcRenderer.on(event, handler);
+  return () => ipcRenderer.removeListener(event, handler);
 };
-
-// Run initialization
-initializePreload();
-
 if (process.contextIsolated) {
   try {
     contextBridge.exposeInMainWorld("app", {
+      roundhouse: {
+        ready: () => ready,
+        login: () => call("login"),
+        follows: () => call("follows"),
+        open: (slug) => call("playerOpen", slug),
+        stop: () => call("playerStop"),
+        control: (action, value) => call("playerControl", action, value),
+        bounds: (rect) => call("playerBounds", rect),
+        fullscreen: (value) => call("fullscreen", value),
+        onPlayer: (callback) => subscribe("roundhouse:player", callback),
+        onAccount: (callback) => subscribe("roundhouse:account", callback),
+        onFullscreen: (callback) => subscribe("roundhouse:fullscreen", callback),
+      },
       minimize: () => ipcRenderer.send("minimize"),
       maximize: () => ipcRenderer.send("maximize"),
       close: () => ipcRenderer.send("close"),
@@ -250,7 +160,8 @@ if (process.contextIsolated) {
       },
 
       modActions: {
-        getBanUser: (channelName, username) => withAuth((token, session) => getBanUser(channelName, username, token, session)),
+        getBanUser: (channelName, username) =>
+          withAuth((token, session) => getBanUser(channelName, username, token, session)),
         getUnbanUser: (channelName, username) =>
           withAuth((token, session) => getUnbanUser(channelName, username, token, session)),
         getTimeoutUser: (channelName, username, banDuration) =>
@@ -304,7 +215,8 @@ if (process.contextIsolated) {
       replyLogs: {
         get: (data) => ipcRenderer.invoke("replyLogs:get", { data }),
         add: (data) => ipcRenderer.invoke("replyLogs:add", data),
-        updateDeleted: (chatroomId, messageId) => ipcRenderer.invoke("replyLogs:updateDeleted", { chatroomId, messageId }),
+        updateDeleted: (chatroomId, messageId) =>
+          ipcRenderer.invoke("replyLogs:updateDeleted", { chatroomId, messageId }),
         clear: (data) => ipcRenderer.invoke("replyLogs:clear", { data }),
         onUpdate: (callback) => {
           const handler = (_, data) => callback(data);
@@ -329,7 +241,8 @@ if (process.contextIsolated) {
       kick: {
         getChannelInfo,
         getChannelChatroomInfo,
-        getInitialPollInfo: (channelName) => withAuth((token, session) => getInitialPollInfo(channelName, token, session)),
+        getInitialPollInfo: (channelName) =>
+          withAuth((token, session) => getInitialPollInfo(channelName, token, session)),
         sendMessage: (channelId, message) =>
           withAuth((token, session) => sendMessageToChannel(channelId, message, token, session)),
         sendReply: (channelId, message, metadata = {}) =>
@@ -345,7 +258,8 @@ if (process.contextIsolated) {
           }
         },
         getEmotes: (chatroomName) => getKickEmotes(chatroomName),
-        getSelfChatroomInfo: (chatroomName) => withAuth((token, session) => getSelfChatroomInfo(chatroomName, token, session)),
+        getSelfChatroomInfo: (chatroomName) =>
+          withAuth((token, session) => getSelfChatroomInfo(chatroomName, token, session)),
         getUserChatroomInfo: (chatroomName, username) => getUserChatroomInfo(chatroomName, username),
         getInitialChatroomMessages: (channelID) => getInitialChatroomMessages(channelID),
         getSilenceUser: (userId) => withAuth((token, session) => getSilenceUser(userId, token, session)),
@@ -376,7 +290,7 @@ if (process.contextIsolated) {
 
       // Utility functions
       utils: {
-        openExternal: (url) => shell.openExternal(url),
+        openExternal: (url) => call("openExternal", url),
       },
 
       store: {
@@ -394,12 +308,10 @@ if (process.contextIsolated) {
       auth: {
         isValidToken: () => tokenManager.isValidToken(),
         clearTokens: () => tokenManager.clearTokens(),
-        getToken: () => tokenManager.getToken(),
+        isSignedIn: () => signedIn,
       },
     });
   } catch (error) {
     console.error("Failed to expose APIs:", error);
   }
-} else {
-  window.electron = electronAPI;
 }
