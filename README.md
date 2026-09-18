@@ -10,6 +10,8 @@ Choose **Sign in to Kick** on the welcome screen and complete login in the Kick 
 
 The overview shows live follows first, with offline channels below. Search only covers follows. Select a channel to watch; drag the divider or focus it and use Left/Right to resize chat. Home resets chat to 360 pixels. Back stops playback and disconnects chat. Space pauses, M mutes, F opens fullscreen, and Escape restores the split view when focus is outside the chat editor.
 
+Hover near the video's top edge to reveal the title and Back button, or its bottom edge for playback controls. Keyboard focus also reveals these controls. They overlay the full-height video without resizing it. The chat composer includes Kick and 7TV emote pickers, plus a quick row of available Kick emotes; selecting an emote inserts it into your draft.
+
 ## Development (PowerShell)
 
 Requires Windows x64, Node 24, Python 3, and Visual Studio C++ build tools with a Windows SDK. Use the pinned npm lockfile.

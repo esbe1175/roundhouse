@@ -53,6 +53,7 @@ export function installIPCGuard() {
 
 export function setupRoundhouse(window) {
   player.window = window;
+  player.watchPointer();
   installKickAdapter(async (config) => {
     const url = new URL(config.url);
     if (url.origin !== "https://kick.com") throw new Error("Unsupported Kick API origin.");

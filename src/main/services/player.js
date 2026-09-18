@@ -1,4 +1,4 @@
-import { app } from "electron";
+import { app, screen } from "electron";
 import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { existsSync } from "node:fs";
@@ -15,13 +15,48 @@ export class Player {
     Object.assign(this.state, patch);
     if (this.window && !this.window.isDestroyed()) this.window.webContents.send("roundhouse:player", this.state);
   }
+  watchPointer() {
+    // Native video receives mouse events instead of the DOM. Track edge hover in
+    // screen DIPs, then convert to the same CSS coordinates as the player bounds.
+    this.hoverTimer = setInterval(() => {
+      if (!this.window || this.window.isDestroyed()) return;
+      const bounds = this.window.getContentBounds();
+      const point = screen.getCursorScreenPoint();
+      const zoom = this.window.webContents.getZoomFactor();
+      const x = (point.x - bounds.x) / zoom,
+        y = (point.y - bounds.y) / zoom;
+      const rect = this.rect;
+      const inside =
+        this.slug &&
+        this.window.isFocused() &&
+        !this.window.isMinimized() &&
+        rect &&
+        x >= rect.x &&
+        x < rect.x + rect.width &&
+        y >= rect.y &&
+        y < rect.y + rect.height;
+      const hoverTop = !!inside && y - rect.y < 64;
+      const hoverBottom = !!inside && rect.y + rect.height - y < 64;
+      if (hoverTop !== this.state.hoverTop || hoverBottom !== this.state.hoverBottom)
+        this.emit({ hoverTop, hoverBottom });
+    }, 100);
+    this.window.once("closed", () => clearInterval(this.hoverTimer));
+  }
   async open(slug) {
     if (typeof slug !== "string" || !/^[a-zA-Z0-9_-]+$/.test(slug)) throw new Error("Invalid channel.");
     const generation = ++this.generation;
     this.slug = slug;
     await this.dispose();
     if (generation !== this.generation) return;
-    this.emit({ status: "loading", error: null, qualities: [], quality: "auto", pause: false });
+    this.emit({
+      status: "loading",
+      error: null,
+      qualities: [],
+      quality: "auto",
+      pause: false,
+      hoverTop: false,
+      hoverBottom: false,
+    });
     try {
       const { data } = await this.account.request(`/api/v2/channels/${slug}`);
       if (generation !== this.generation) return;
@@ -114,10 +149,22 @@ export class Player {
     if (!rect) return;
     if (!["x", "y", "width", "height"].every((k) => Number.isFinite(rect[k]) && rect[k] >= 0 && rect[k] < 20000))
       throw new Error("Invalid player rectangle.");
+    const top = rect.overlayTop ?? 0,
+      bottom = rect.overlayBottom ?? 0;
+    if (![top, bottom].every((value) => Number.isFinite(value) && value >= 0 && value <= 256))
+      throw new Error("Invalid player overlay bounds.");
     this.rect = rect;
     const zoom = this.window.webContents.getZoomFactor();
     const visible = !!rect.visible && !this.window.isMinimized();
-    this.host?.bounds(rect.x * zoom, rect.y * zoom, rect.width * zoom, rect.height * zoom, visible);
+    this.host?.bounds(
+      rect.x * zoom,
+      rect.y * zoom,
+      rect.width * zoom,
+      rect.height * zoom,
+      visible,
+      top * zoom,
+      bottom * zoom,
+    );
   }
   async control(action, value) {
     if (action === "retry" || action === "live") {

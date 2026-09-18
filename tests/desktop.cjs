@@ -70,7 +70,10 @@ const assert = require("node:assert/strict");
       route.fulfill({ status: 200, contentType: "application/json", body: "[]" }),
     );
     await page.routeWebSocket(/wss:.*/, (socket) => socket.close());
-    await app.evaluate(({ session, app }) => {
+    await app.evaluate(({ session, app, screen, BrowserWindow }) => {
+      global.roundhouseTestCursor = { x: -10000, y: -10000 };
+      screen.getCursorScreenPoint = () => global.roundhouseTestCursor;
+      BrowserWindow.getAllWindows().find((win) => win.webContents.getURL().startsWith("file:")).isFocused = () => true;
       const kick = session.fromPartition("persist:roundhouse-kick");
       kick.cookies.get = async () => [{ name: "session_token", value: "test-only" }];
       global.roundhouseTestRateLimit = false;
@@ -97,7 +100,9 @@ const assert = require("node:assert/strict");
         } else if (pathname.endsWith("/me")) data = { is_following: true, subscription: null, roles: [], banned: null };
         else if (pathname.endsWith("/messages")) data = { data: { messages: [] } };
         else if (pathname.endsWith("/polls")) data = { status: { code: 404 } };
-        else if (pathname.startsWith("/emotes") || pathname.includes("silenced-users")) data = [];
+        else if (pathname.startsWith("/emotes"))
+          data = [{ name: "Emojis", emotes: [{ id: 123, name: "TestSmile", subscribers_only: false }] }];
+        else if (pathname.includes("silenced-users")) data = [];
         else if (pathname === "/broadcasting/auth") return new Response("{}", { status: 403 });
         else if (pathname.endsWith("/test_live") || pathname.endsWith("/test_live/info"))
           data = {
@@ -187,6 +192,25 @@ const assert = require("node:assert/strict");
     await page.getByRole("button", { name: "Refresh", exact: true }).click();
     await expect(page.getByRole("alert")).toHaveCount(0);
     await page.getByRole("button", { name: /Live channel/ }).click();
+    const hoverEdge = async (edge) => {
+      const rect = await page.locator(".rh-surface").boundingBox();
+      await app.evaluate(
+        ({ BrowserWindow }, { rect, edge }) => {
+          const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().startsWith("file:"));
+          const origin = win.getContentBounds(),
+            zoom = win.webContents.getZoomFactor();
+          global.roundhouseTestCursor = {
+            x: origin.x + (rect.x + rect.width / 2) * zoom,
+            y:
+              origin.y +
+              (rect.y + (edge === "top" ? 10 : edge === "bottom" ? rect.height - 10 : rect.height / 2)) * zoom,
+          };
+        },
+        { rect, edge },
+      );
+      if (edge !== "center")
+        await expect(page.locator(edge === "top" ? ".rh-watchbar" : ".rh-player-controls")).toHaveClass(/is-visible/);
+    };
     await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeEnabled({ timeout: 15000 });
     // Repeat open/stop while an existing player is being torn down.
     await page.evaluate(async () => {
@@ -198,12 +222,46 @@ const assert = require("node:assert/strict");
       await window.app.roundhouse.open("test_live");
     });
     await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeEnabled({ timeout: 15000 });
+    const videoBefore = await page.locator(".rh-surface").boundingBox();
+    assert.equal(videoBefore.height, (await page.locator(".rh-watch").boundingBox()).height);
+    const input = page.getByRole("textbox", { name: "Chat message" });
+    await expect(input).toBeVisible();
+    await expect(page.getByRole("button", { name: "Kick emotes", exact: true })).toBeVisible();
+    await expect(page.getByRole("toolbar", { name: "Quick emotes" })).toBeVisible();
+    const composerFits = await page.locator(".chatInputContainer").evaluate((el) => {
+      const container = el.closest(".rh-chat").getBoundingClientRect(),
+        input = el.getBoundingClientRect();
+      return input.left >= container.left && input.right <= container.right && input.bottom <= container.bottom;
+    });
+    assert.equal(composerFits, true);
+    await input.fill("Unsent test draft");
+    await page.getByRole("button", { name: "Insert TestSmile" }).click();
+    await expect(input.locator('img[emote-name="TestSmile"]')).toHaveCount(1);
+    await page.getByRole("button", { name: "Kick emotes", exact: true }).click();
+    await expect(page.locator(".emoteDialog.show")).toBeVisible();
+    await input.click();
+    await hoverEdge("bottom");
+    assert.deepEqual(await page.locator(".rh-surface").boundingBox(), videoBefore);
     await page.getByRole("button", { name: "Pause", exact: true }).click();
     await expect(page.getByRole("button", { name: "Play", exact: true })).toBeVisible();
+    await hoverEdge("center");
+    await expect(page.locator(".rh-player-controls")).not.toHaveClass(/is-visible/);
+    await hoverEdge("bottom");
     await page.getByRole("combobox", { name: "Video quality" }).selectOption("0");
     await expect
       .poll(() => app.evaluate(() => global.roundhouseTestLoads.at(-1)))
       .toBe("https://media.fixture/720.m3u8");
+    await input.focus();
+    await hoverEdge("center");
+    await expect(page.locator(".rh-player-controls")).not.toHaveClass(/is-visible/);
+    // Keyboard focus reveals controls even with the pointer in the video center.
+    await page.getByRole("button", { name: "← Following" }).focus();
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("button", { name: "Play", exact: true })).toBeFocused();
+    await expect(page.locator(".rh-player-controls")).toHaveClass(/is-visible/);
+    await input.focus();
+    await hoverEdge("top");
+    assert.deepEqual(await page.locator(".rh-surface").boundingBox(), videoBefore);
     await page.getByRole("button", { name: "← Following" }).click();
     await expect
       .poll(() => app.evaluate(() => global.roundhouseTestChildren.every((child) => child.exitCode !== null)))
@@ -216,11 +274,25 @@ const assert = require("node:assert/strict");
     await divider.focus();
     await page.keyboard.press("ArrowLeft");
     await expect(divider).toHaveAttribute("aria-valuenow", String(width + 20));
+    for (let i = 0; i < 10; i++) await page.keyboard.press("ArrowRight");
+    await expect(divider).toHaveAttribute("aria-valuenow", "280");
+    assert.equal(
+      await input.evaluate((el) => {
+        const pane = el.closest(".rh-chat").getBoundingClientRect();
+        const box = el.closest(".chatInputContainer").getBoundingClientRect();
+        return box.left >= pane.left && box.right <= pane.right && box.bottom <= pane.bottom;
+      }),
+      true,
+    );
+    await expect(page.getByRole("button", { name: "Kick emotes", exact: true })).toBeInViewport();
+    await page.keyboard.press("Home");
+    await hoverEdge("bottom");
     await page.getByRole("button", { name: "Fullscreen", exact: true }).click();
     await expect(divider).toHaveCount(0);
     await page.keyboard.press("Escape");
     await expect(divider).toBeVisible();
     await page.screenshot({ path: ".cache/watch-offline.png" });
+    await hoverEdge("top");
     await page.getByRole("button", { name: "← Following" }).click();
     await expect(page.getByRole("heading", { name: "Following" })).toBeVisible();
     assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem("chatrooms") || "[]")), []);
@@ -238,7 +310,7 @@ const assert = require("node:assert/strict");
     assert.equal(untrusted, "undefined");
     assert.deepEqual(errors, []);
     console.log(
-      "PASS: welcome, login dialog after delayed hydration, login cancellation/retry, validated login completion, private bridge, follows, search, stale results, real embedded MPV with synthetic video, pause, quality, process cleanup, offline chat, divider, fullscreen, Back cleanup, isolated remote page.",
+      "PASS: welcome, login dialog after delayed hydration, login cancellation/retry, validated login completion, private bridge, follows, search, stale results, real embedded MPV with synthetic video, full-height video, edge hover and keyboard overlays, pause, quality, process cleanup, chat draft and emote insertion, narrow composer, offline chat, divider, fullscreen, Back cleanup, isolated remote page.",
     );
   } finally {
     await app.close();

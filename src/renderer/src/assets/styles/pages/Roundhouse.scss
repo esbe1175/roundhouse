@@ -378,6 +378,7 @@
   justify-content: space-between;
 }
 .rh-watchbar {
+  top: 0;
   display: flex;
   align-items: center;
   gap: 16px;
@@ -407,6 +408,7 @@
   overflow: hidden;
 }
 .rh-player {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -439,6 +441,7 @@
   }
 }
 .rh-player-controls {
+  bottom: 0;
   height: 48px;
   display: flex;
   align-items: center;
@@ -459,6 +462,19 @@
     font-size: 11px;
     margin-left: auto;
     color: var(--text-tertiary);
+  }
+}
+.rh-video-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  opacity: 0;
+  pointer-events: none;
+  background: var(--navbar-bg);
+  &.is-visible {
+    opacity: 1;
+    pointer-events: auto;
   }
 }
 .rh-divider {

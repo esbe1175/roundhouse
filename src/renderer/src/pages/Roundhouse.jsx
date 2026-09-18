@@ -74,6 +74,12 @@ export default function Roundhouse() {
     [mentions, setMentions] = useState(false);
   const [width, setWidth] = useState(() => Number(localStorage.getItem("roundhouse.chatWidth")) || 360);
   const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
+  const [topFocus, setTopFocus] = useState(false),
+    [bottomFocus, setBottomFocus] = useState(false);
+  const topBar = useRef(null),
+    bottomBar = useRef(null);
+  const topShown = !!player.hoverTop || topFocus,
+    bottomShown = !!player.hoverBottom || bottomFocus;
   const overview = useRef(null),
     scroll = useRef(0),
     surface = useRef(null),
@@ -92,6 +98,8 @@ export default function Roundhouse() {
     setMentions(false);
   }, []);
   const back = useCallback(async () => {
+    setTopFocus(false);
+    setBottomFocus(false);
     generation.current++;
     selectedRef.current = null;
     setSelected(null);
@@ -170,6 +178,8 @@ export default function Roundhouse() {
     }
   };
   const open = async (channel) => {
+    setTopFocus(false);
+    setBottomFocus(false);
     const current = ++generation.current;
     scroll.current = overview.current?.scrollTop || 0;
     clearChat();
@@ -229,12 +239,16 @@ export default function Roundhouse() {
             width: rect.width,
             height: rect.height,
             visible: !covered && ["playing", "loading"].includes(player.status),
+            overlayTop: topShown ? topBar.current?.getBoundingClientRect().height || 0 : 0,
+            overlayBottom: bottomShown ? bottomBar.current?.getBoundingClientRect().height || 0 : 0,
           })
           .catch(() => {});
       });
     };
     const resize = new ResizeObserver(sync);
     resize.observe(surface.current);
+    if (topBar.current) resize.observe(topBar.current);
+    if (bottomBar.current) resize.observe(bottomBar.current);
     const mutation = new MutationObserver(sync);
     mutation.observe(document.body, {
       childList: true,
@@ -250,7 +264,7 @@ export default function Roundhouse() {
       mutation.disconnect();
       window.removeEventListener("resize", sync);
     };
-  }, [selected, fullscreen, player.status]);
+  }, [selected, fullscreen, player.status, topShown, bottomShown]);
 
   useEffect(() => {
     const keys = (event) => {
@@ -336,15 +350,6 @@ export default function Roundhouse() {
         </main>
       ) : selected ? (
         <>
-          {!fullscreen && (
-            <nav className="rh-watchbar">
-              <button onClick={() => void back()}>← Following</button>
-              <div>
-                <strong>{selected.name}</strong>
-                <span>{selected.title}</span>
-              </div>
-            </nav>
-          )}
           {error && (
             <div className="rh-error" role="alert">
               {error}
@@ -353,6 +358,22 @@ export default function Roundhouse() {
           )}
           <main className="rh-watch">
             <section className="rh-player">
+              <nav
+                ref={topBar}
+                aria-label="Channel controls"
+                className={`rh-watchbar rh-video-overlay ${topShown ? "is-visible" : ""}`}
+                onPointerDownCapture={() => setTopFocus(false)}
+                onFocusCapture={(event) => setTopFocus(event.target.matches(":focus-visible"))}
+                onBlurCapture={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget)) setTopFocus(false);
+                }}
+              >
+                <button onClick={() => void back()}>← Following</button>
+                <div>
+                  <strong>{selected.name}</strong>
+                  <span>{selected.title}</span>
+                </div>
+              </nav>
               <div className="rh-surface" ref={surface}>
                 {!["playing"].includes(player.status) && (
                   <div className="rh-player-message">
@@ -374,7 +395,17 @@ export default function Roundhouse() {
                   </div>
                 )}
               </div>
-              <div className="rh-player-controls">
+              <div
+                ref={bottomBar}
+                role="toolbar"
+                aria-label="Playback controls"
+                className={`rh-player-controls rh-video-overlay ${bottomShown ? "is-visible" : ""}`}
+                onPointerDownCapture={() => setBottomFocus(false)}
+                onFocusCapture={(event) => setBottomFocus(event.target.matches(":focus-visible"))}
+                onBlurCapture={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget)) setBottomFocus(false);
+                }}
+              >
                 <button disabled={player.status !== "playing"} onClick={() => void control("pause")}>
                   {player.pause ? "Play" : "Pause"}
                 </button>

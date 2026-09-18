@@ -18,6 +18,17 @@ app.whenReady().then(async () => {
     const hwnd = host.create(window.getNativeWindowHandle());
     assert.ok(hwnd > 0);
     host.bounds(20, 30, 640, 360, true);
+    const fullGeometry = host.geometry();
+    host.bounds(20, 30, 640, 360, true, 40, 48);
+    const overlayGeometry = host.geometry();
+    assert.equal(overlayGeometry.width, fullGeometry.width);
+    assert.equal(overlayGeometry.height, fullGeometry.height);
+    const scale = fullGeometry.width / 640;
+    assert.equal(overlayGeometry.top, Math.floor(40 * scale));
+    assert.equal(overlayGeometry.bottom, fullGeometry.height - Math.floor(48 * scale));
+    host.bounds(20, 30, 640, 360, true, 0, 0);
+    assert.equal(host.geometry().top, 0);
+    assert.equal(host.geometry().bottom, fullGeometry.height);
     const pipe = `\\\\.\\pipe\\roundhouse-test-${process.pid}`;
     child = spawn(
       path.resolve("resources/mpv/mpv.exe"),
@@ -67,7 +78,7 @@ app.whenReady().then(async () => {
     await ipc.command(["screenshot-to-file", screenshot, "video"]);
     assert.ok(fs.statSync(screenshot).size > 1000);
     console.log(
-      `PASS: native HWND embedding, resize, visibility, MPV video frame, pause, volume, mute; display scale ${process.env.ROUNDHOUSE_TEST_SCALE || "1"}`,
+      `PASS: native HWND embedding, overlay regions without video resize, resize, visibility, MPV video frame, pause, volume, mute; display scale ${process.env.ROUNDHOUSE_TEST_SCALE || "1"}`,
     );
   } catch (error) {
     console.error(error);

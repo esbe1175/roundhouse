@@ -64,7 +64,8 @@ const EmoteSection = ({ emotes, title, handleEmoteClick, type, section, userChat
                 className={clsx(
                   "emoteItem",
                   emote?.subscribers_only && !userChatroomInfo?.subscription && "emoteItemSubscriberOnly",
-                )}>
+                )}
+              >
                 {type === "kick" ? (
                   <img
                     src={`https://files.kick.com/emotes/${emote.id}/fullsize`}
@@ -110,7 +111,9 @@ const SevenTVEmoteDialog = memo(
       return sevenTVEmotes
         .map((emoteSection) => ({
           ...emoteSection,
-          emotes: (emoteSection.emotes || []).filter((emote) => emote.name.toLowerCase().includes(searchTerm.toLowerCase())),
+          emotes: (emoteSection.emotes || []).filter((emote) =>
+            emote.name.toLowerCase().includes(searchTerm.toLowerCase()),
+          ),
         }))
         .filter((section) => section.emotes && section.emotes.length > 0);
     }, [sevenTVEmotes, searchTerm]);
@@ -145,21 +148,24 @@ const SevenTVEmoteDialog = memo(
                 {sevenTVEmotes?.find((set) => set.type === "personal" && set?.emotes?.length > 0) && (
                   <button
                     className={clsx("dialogHeadMenuItem", currentSection === "personal" && "active")}
-                    onClick={() => setCurrentSection(currentSection === "personal" ? null : "personal")}>
+                    onClick={() => setCurrentSection(currentSection === "personal" ? null : "personal")}
+                  >
                     <img src={UserIcon} height={24} width={24} alt="Personal Emotes" />
                   </button>
                 )}
                 {sevenTVEmotes?.find((set) => set.type === "channel" && set?.emotes?.length > 0) && (
                   <button
                     className={clsx("dialogHeadMenuItem", currentSection === "channel" && "active")}
-                    onClick={() => setCurrentSection(currentSection === "channel" ? null : "channel")}>
+                    onClick={() => setCurrentSection(currentSection === "channel" ? null : "channel")}
+                  >
                     <img src={channelAvatarSrc} height={24} width={24} alt="Channel Emotes" />
                   </button>
                 )}
                 {sevenTVEmotes?.find((set) => set.type === "global" && set?.emotes?.length > 0) && (
                   <button
                     className={clsx("dialogHeadMenuItem", currentSection === "global" && "active")}
-                    onClick={() => setCurrentSection(currentSection === "global" ? null : "global")}>
+                    onClick={() => setCurrentSection(currentSection === "global" ? null : "global")}
+                  >
                     <img src={GlobeIcon} height={24} width={24} alt="Global Emotes" />
                   </button>
                 )}
@@ -234,21 +240,24 @@ const KickEmoteDialog = memo(
                 {isChannelSet && isChannelSet?.emotes?.length > 0 && (
                   <button
                     className={clsx("dialogHeadMenuItem", currentSection === "channel_set" && "active")}
-                    onClick={() => setCurrentSection(currentSection === "channel_set" ? null : "channel_set")}>
+                    onClick={() => setCurrentSection(currentSection === "channel_set" ? null : "channel_set")}
+                  >
                     <img src={isChannelSet?.user?.profile_pic} height={24} width={24} alt="Channel Emotes" />
                   </button>
                 )}
                 {kickEmotes?.find((set) => set.name === "Global" && set?.emotes?.length > 0) && (
                   <button
                     className={clsx("dialogHeadMenuItem", currentSection === "Global" && "active")}
-                    onClick={() => setCurrentSection(currentSection === "Global" ? null : "Global")}>
+                    onClick={() => setCurrentSection(currentSection === "Global" ? null : "Global")}
+                  >
                     <img src={GlobeIcon} height={24} width={24} alt="Global Emotes" />
                   </button>
                 )}
                 {kickEmotes?.find((set) => set.name === "Emojis" && set?.emotes?.length > 0) && (
                   <button
                     className={clsx("dialogHeadMenuItem", currentSection === "Emojis" && "active")}
-                    onClick={() => setCurrentSection(currentSection === "Emojis" ? null : "Emojis")}>
+                    onClick={() => setCurrentSection(currentSection === "Emojis" ? null : "Emojis")}
+                  >
                     <img src={KickLogoIcon} height={16} width={16} alt="Emojis" />
                   </button>
                 )}
@@ -340,15 +349,19 @@ const EmoteDialogs = memo(
       <TooltipProvider>
         <div className={clsx("chatEmoteBtns", activeDialog !== null && "activeDialog")}>
           <button
+            aria-label="7TV emotes"
             className={clsx("emoteBtn", activeDialog === "7tv" && "activeDialog")}
-            onClick={() => setActiveDialog(activeDialog === "7tv" ? null : "7tv")}>
+            onClick={() => setActiveDialog(activeDialog === "7tv" ? null : "7tv")}
+          >
             <img src={STVLogo} height="24px" width="24px" alt="7TV Emotes" />
           </button>
           <span className="emoteBtnSeparator" />
           <button
+            aria-label="Kick emotes"
             className={clsx("emoteBtn", "kickEmoteButton", activeDialog === "kick" && "activeDialog")}
             onMouseEnter={getRandomKickEmote}
-            onClick={() => setActiveDialog(activeDialog === "kick" ? null : "kick")}>
+            onClick={() => setActiveDialog(activeDialog === "kick" ? null : "kick")}
+          >
             <img
               className="kickEmote emote"
               src={`https://files.kick.com/emotes/${currentHoverEmote?.id || "1730762"}/fullsize`}

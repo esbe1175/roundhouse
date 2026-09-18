@@ -26,20 +26,43 @@ static napi_value Create(napi_env env, napi_callback_info info) {
   napi_value result;napi_create_uint32(env,static_cast<uint32_t>(reinterpret_cast<uintptr_t>(host)),&result);return result;
 }
 static napi_value Bounds(napi_env env,napi_callback_info info){
-  size_t count=5;napi_value args[5];napi_get_cb_info(env,info,&count,args,nullptr,nullptr);
-  if(count!=5){napi_throw_error(env,nullptr,"Expected x, y, width, height, visible");return nullptr;}
+  size_t count=7;napi_value args[7];napi_get_cb_info(env,info,&count,args,nullptr,nullptr);
+  if(count!=5 && count!=7){napi_throw_error(env,nullptr,"Expected bounds, visibility, and optional overlay heights");return nullptr;}
   double v[4];bool visible;
   for(int i=0;i<4;i++) if(napi_get_value_double(env,args[i],&v[i])!=napi_ok){napi_throw_type_error(env,nullptr,"Invalid bounds");return nullptr;}
   napi_get_value_bool(env,args[4],&visible);
+  double top=0,bottom=0;
+  if(count==7 && (napi_get_value_double(env,args[5],&top)!=napi_ok || napi_get_value_double(env,args[6],&bottom)!=napi_ok)){
+    napi_throw_type_error(env,nullptr,"Invalid overlay heights");return nullptr;
+  }
   if(host){const double scale=GetDpiForWindow(owner)/96.0;
     SetWindowPos(host,HWND_TOP,static_cast<int>(v[0]*scale),static_cast<int>(v[1]*scale),std::max(1,static_cast<int>(v[2]*scale)),std::max(1,static_cast<int>(v[3]*scale)),SWP_NOACTIVATE);
+    // Chromium cannot paint over a child HWND. Cut out only the visible toolbar
+    // bands; the video client rectangle stays full-sized, so mpv never rescales.
+    const int width=std::max(1,static_cast<int>(v[2]*scale));
+    const int height=std::max(1,static_cast<int>(v[3]*scale));
+    const int clipTop=std::clamp(static_cast<int>(top*scale),0,height);
+    const int clipBottom=std::clamp(static_cast<int>(bottom*scale),0,height-clipTop);
+    HRGN region=CreateRectRgn(0,clipTop,width,height-clipBottom);
+    if(!SetWindowRgn(host,region,TRUE)) DeleteObject(region);
     ShowWindow(host,visible?SW_SHOWNOACTIVATE:SW_HIDE);
   }
   napi_value result;napi_get_undefined(env,&result);return result;
 }
+static napi_value Geometry(napi_env env,napi_callback_info){
+  napi_value result;napi_create_object(env,&result);
+  if(host){
+    RECT client={},clip={};GetClientRect(host,&client);
+    HRGN region=CreateRectRgn(0,0,0,0);GetWindowRgn(host,region);GetRgnBox(region,&clip);DeleteObject(region);
+    const char* keys[]={"width","height","top","bottom"};
+    int values[]={client.right,client.bottom,clip.top,clip.bottom};
+    for(int i=0;i<4;i++){napi_value value;napi_create_int32(env,values[i],&value);napi_set_named_property(env,result,keys[i],value);}
+  }
+  return result;
+}
 static napi_value Destroy(napi_env env,napi_callback_info){if(host){DestroyWindow(host);host=nullptr;}napi_value result;napi_get_undefined(env,&result);return result;}
 static napi_value Init(napi_env env,napi_value exports){
-  napi_property_descriptor methods[]={{"create",nullptr,Create,nullptr,nullptr,nullptr,napi_default,nullptr},{"bounds",nullptr,Bounds,nullptr,nullptr,nullptr,napi_default,nullptr},{"destroy",nullptr,Destroy,nullptr,nullptr,nullptr,napi_default,nullptr}};
-  napi_define_properties(env,exports,3,methods);return exports;
+  napi_property_descriptor methods[]={{"create",nullptr,Create,nullptr,nullptr,nullptr,napi_default,nullptr},{"bounds",nullptr,Bounds,nullptr,nullptr,nullptr,napi_default,nullptr},{"destroy",nullptr,Destroy,nullptr,nullptr,nullptr,napi_default,nullptr},{"geometry",nullptr,Geometry,nullptr,nullptr,nullptr,napi_default,nullptr}};
+  napi_define_properties(env,exports,4,methods);return exports;
 }
 NAPI_MODULE(NODE_GYP_MODULE_NAME,Init)

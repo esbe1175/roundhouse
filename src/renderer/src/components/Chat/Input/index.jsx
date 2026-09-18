@@ -31,6 +31,7 @@ import { $rootTextContent } from "@lexical/text";
 import useChatStore from "../../../providers/ChatProvider";
 
 import EmoteDialogs from "./EmoteDialogs";
+import { useAccessibleKickEmotes } from "./useAccessibleKickEmotes";
 import { useShallow } from "zustand/react/shallow";
 import { $isEmoteNode, EmoteNode } from "./EmoteNode";
 import { kickEmoteInputRegex } from "../../../../../../utils/constants";
@@ -83,7 +84,8 @@ const EmoteSuggestions = memo(
                 onClick={() => {
                   if (emote?.subscribers_only && !userChatroomInfo?.subscription) return;
                   onSelect(emote);
-                }}>
+                }}
+              >
                 <div className="inputSuggestionImage">
                   <img
                     className="emote"
@@ -159,7 +161,8 @@ const ChatterSuggestions = memo(
                 className={clsx("inputSuggestion", selectedIndex === i && "selected")}
                 onClick={() => {
                   onSelect(chatter);
-                }}>
+                }}
+              >
                 <div className="inputSuggestionInfo">
                   <span>{chatter?.username}</span>
                 </div>
@@ -198,7 +201,9 @@ const KeyHandler = ({ chatroomId, onSendMessage, replyInputData, setReplyInputDa
     useShallow((state) => state.chatrooms.find((room) => room.id === chatroomId)?.userChatroomInfo),
   );
   const chatters = useChatStore(useShallow((state) => state.chatters[chatroomId]));
-  const kickEmotes = useChatStore(useShallow((state) => state.chatrooms.find((room) => room.id === chatroomId)?.emotes));
+  const kickEmotes = useChatStore(
+    useShallow((state) => state.chatrooms.find((room) => room.id === chatroomId)?.emotes),
+  );
 
   const searchEmotes = useCallback(
     (text) => {
@@ -241,7 +246,9 @@ const KeyHandler = ({ chatroomId, onSendMessage, replyInputData, setReplyInputDa
       if (!text) return [];
       const transformedText = text.toLowerCase();
 
-      return chatters?.filter((chatter) => chatter.username.toLowerCase().includes(transformedText))?.slice(0, 10) || [];
+      return (
+        chatters?.filter((chatter) => chatter.username.toLowerCase().includes(transformedText))?.slice(0, 10) || []
+      );
     },
     [chatters],
   );
@@ -340,7 +347,8 @@ const KeyHandler = ({ chatroomId, onSendMessage, replyInputData, setReplyInputDa
           const history = messageHistory.get(chatroomId);
           if (!history?.sentMessages?.length) return false;
 
-          const currentIndex = history.selectedIndex !== undefined ? history.selectedIndex - 1 : history.sentMessages.length - 1;
+          const currentIndex =
+            history.selectedIndex !== undefined ? history.selectedIndex - 1 : history.sentMessages.length - 1;
           if (currentIndex < 0) return false;
 
           messageHistory.set(chatroomId, {
@@ -703,7 +711,11 @@ const KeyHandler = ({ chatroomId, onSendMessage, replyInputData, setReplyInputDa
         userChatroomInfo={userChatroomInfo}
       />
 
-      <ChatterSuggestions suggestions={chatterSuggestions} selectedIndex={selectedChatterIndex} onSelect={insertChatterMention} />
+      <ChatterSuggestions
+        suggestions={chatterSuggestions}
+        selectedIndex={selectedChatterIndex}
+        onSelect={insertChatterMention}
+      />
     </>
   );
 };
@@ -754,7 +766,9 @@ const processEmoteInput = ({ node, kickEmotes }) => {
 
 const EmoteTransformer = ({ chatroomId }) => {
   const [editor] = useLexicalComposerContext();
-  const kickEmotes = useChatStore(useShallow((state) => state.chatrooms.find((room) => room.id === chatroomId)?.emotes));
+  const kickEmotes = useChatStore(
+    useShallow((state) => state.chatrooms.find((room) => room.id === chatroomId)?.emotes),
+  );
 
   useEffect(() => {
     if (!editor) return;
@@ -765,7 +779,37 @@ const EmoteTransformer = ({ chatroomId }) => {
   }, [editor, kickEmotes]);
 };
 
-const EmoteHandler = ({ chatroomId, userChatroomInfo }) => {
+const QuickEmotes = ({ chatroomId, onSelect }) => {
+  const sets = useAccessibleKickEmotes(chatroomId);
+  const seen = new Set();
+  const emotes = sets
+    .flatMap((set) => set.emotes)
+    .filter((emote) => {
+      if (!emote.__allowUse || seen.has(emote.id)) return false;
+      seen.add(emote.id);
+      return true;
+    })
+    .slice(0, 8);
+  if (!emotes.length) return null;
+  return (
+    <div className="chatQuickEmotes" role="toolbar" aria-label="Quick emotes">
+      {emotes.map((emote) => (
+        <button
+          key={emote.id}
+          type="button"
+          title={emote.name}
+          aria-label={`Insert ${emote.name}`}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => onSelect(emote)}
+        >
+          <img src={`https://files.kick.com/emotes/${emote.id}/fullsize`} alt="" loading="lazy" />
+        </button>
+      ))}
+    </div>
+  );
+};
+
+const EmoteHandler = ({ chatroomId, userChatroomInfo, quick = false }) => {
   const [editor] = useLexicalComposerContext();
 
   const handleEmoteClick = (emote) => {
@@ -781,7 +825,11 @@ const EmoteHandler = ({ chatroomId, userChatroomInfo }) => {
     });
   };
 
-  return <EmoteDialogs chatroomId={chatroomId} handleEmoteClick={handleEmoteClick} userChatroomInfo={userChatroomInfo} />;
+  return quick ? (
+    <QuickEmotes chatroomId={chatroomId} onSelect={handleEmoteClick} />
+  ) : (
+    <EmoteDialogs chatroomId={chatroomId} handleEmoteClick={handleEmoteClick} userChatroomInfo={userChatroomInfo} />
+  );
 };
 
 const initialConfig = {
@@ -930,14 +978,15 @@ const ChatInput = memo(
           )}
           <ReplyHandler chatroomId={chatroomId} replyInputData={replyInputData} setReplyInputData={setReplyInputData} />
         </div>
-        <div className="chatInputContainer">
-          <LexicalComposer key={`composer-${chatroomId}`} initialConfig={initialConfig}>
+        <LexicalComposer key={`composer-${chatroomId}`} initialConfig={initialConfig}>
+          <div className="chatInputContainer">
             <div className="chatInputBox">
               <PlainTextPlugin
                 contentEditable={
                   <div>
                     <ContentEditable
                       className="chatInput"
+                      aria-label="Chat message"
                       enterKeyHint="send"
                       aria-placeholder={"Enter message..."}
                       placeholder={<div className="chatInputPlaceholder">Send a message...</div>}
@@ -952,21 +1001,22 @@ const ChatInput = memo(
             <div className={clsx("chatInputActions")}>
               <EmoteHandler chatroomId={chatroomId} userChatroomInfo={chatroom?.userChatroomInfo} />
             </div>
-            <KeyHandler
-              isReplyThread={isReplyThread}
-              chatroomId={chatroomId}
-              allStvEmotes={allStvEmotes}
-              onSendMessage={(content) => {
-                handleSendMessage(content, replyInputData ? "reply" : "message");
-              }}
-              replyInputData={replyInputData}
-              setReplyInputData={setReplyInputData}
-            />
-            <EmoteTransformer chatroomId={chatroomId} />
-            <HistoryPlugin />
-            <AutoFocusPlugin />
-          </LexicalComposer>
-        </div>
+          </div>
+          <EmoteHandler chatroomId={chatroomId} userChatroomInfo={chatroom?.userChatroomInfo} quick />
+          <KeyHandler
+            isReplyThread={isReplyThread}
+            chatroomId={chatroomId}
+            allStvEmotes={allStvEmotes}
+            onSendMessage={(content) => {
+              handleSendMessage(content, replyInputData ? "reply" : "message");
+            }}
+            replyInputData={replyInputData}
+            setReplyInputData={setReplyInputData}
+          />
+          <EmoteTransformer chatroomId={chatroomId} />
+          <HistoryPlugin />
+          <AutoFocusPlugin />
+        </LexicalComposer>
       </div>
     );
   },
