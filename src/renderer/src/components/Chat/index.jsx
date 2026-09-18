@@ -10,13 +10,13 @@ import relativeTime from "dayjs/plugin/relativeTime";
 import StreamerInfo from "./StreamerInfo";
 dayjs.extend(relativeTime);
 
-const Chat = ({ chatroomId, kickUsername, kickId, settings, updateSettings }) => {
+const Chat = ({ chatroomId, kickUsername, kickId, settings, updateSettings, compactHeader = false, headerTarget }) => {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   const chatroom = useChatStore((state) => state.chatrooms.filter((chatroom) => chatroom.id === chatroomId)[0]);
   const personalEmoteSets = useChatStore((state) => state.personalEmoteSets);
   const messages = useChatStore(useShallow((state) => state.messages[chatroomId] || []));
-  
+
   const markChatroomMessagesAsRead = useChatStore((state) => state.markChatroomMessagesAsRead);
   const donators = useChatStore(useShallow((state) => state.donators));
 
@@ -68,6 +68,8 @@ const Chat = ({ chatroomId, kickUsername, kickId, settings, updateSettings }) =>
   return (
     <div className="chatContainer">
       <StreamerInfo
+        compact={compactHeader}
+        headerTarget={headerTarget}
         streamerData={chatroom?.streamerData}
         streamStatus={chatroom?.streamStatus}
         userChatroomInfo={chatroom?.userChatroomInfo}

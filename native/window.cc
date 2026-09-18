@@ -5,6 +5,9 @@
 static HWND host = nullptr;
 static HWND owner = nullptr;
 static LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+  // Chromium's last cursor may be the split-view resize cursor. Child video
+  // receives mouse events itself, so explicitly restore the arrow on entry.
+  if (msg == WM_SETCURSOR && LOWORD(lp) == HTCLIENT) { SetCursor(LoadCursor(nullptr, IDC_ARROW)); return TRUE; }
   if (msg == WM_SETFOCUS || msg == WM_LBUTTONDOWN) { SetFocus(owner); return 0; }
   if (msg == WM_MOUSEACTIVATE) return MA_NOACTIVATE;
   return DefWindowProcW(hwnd, msg, wp, lp);

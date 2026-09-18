@@ -26,19 +26,24 @@ export class Player {
       const x = (point.x - bounds.x) / zoom,
         y = (point.y - bounds.y) / zoom;
       const rect = this.rect;
-      const inside =
-        this.slug &&
-        this.window.isFocused() &&
-        !this.window.isMinimized() &&
-        rect &&
-        x >= rect.x &&
-        x < rect.x + rect.width &&
-        y >= rect.y &&
-        y < rect.y + rect.height;
+      const active = this.slug && this.window.isFocused() && !this.window.isMinimized() && rect;
+      const inside = active && x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height;
       const hoverTop = !!inside && y - rect.y < 64;
       const hoverBottom = !!inside && rect.y + rect.height - y < 64;
-      if (hoverTop !== this.state.hoverTop || hoverBottom !== this.state.hoverBottom)
-        this.emit({ hoverTop, hoverBottom });
+      // The invisible divider sits over the first few pixels of chat. Native
+      // video can swallow DOM mouseleave, so its hover must also use screen position.
+      const hoverDivider =
+        !!active &&
+        x >= rect.x + rect.width &&
+        x < rect.x + rect.width + (rect.dividerWidth || 0) &&
+        y >= rect.y &&
+        y < rect.y + rect.height;
+      if (
+        hoverTop !== this.state.hoverTop ||
+        hoverBottom !== this.state.hoverBottom ||
+        hoverDivider !== this.state.hoverDivider
+      )
+        this.emit({ hoverTop, hoverBottom, hoverDivider });
     }, 100);
     this.window.once("closed", () => clearInterval(this.hoverTimer));
   }
@@ -153,6 +158,8 @@ export class Player {
       bottom = rect.overlayBottom ?? 0;
     if (![top, bottom].every((value) => Number.isFinite(value) && value >= 0 && value <= 256))
       throw new Error("Invalid player overlay bounds.");
+    if (!Number.isFinite(rect.dividerWidth ?? 0) || (rect.dividerWidth ?? 0) < 0 || (rect.dividerWidth ?? 0) > 16)
+      throw new Error("Invalid divider width.");
     this.rect = rect;
     const zoom = this.window.webContents.getZoomFactor();
     const visible = !!rect.visible && !this.window.isMinimized();

@@ -1,4 +1,5 @@
 import { useState, useEffect, memo, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { useShallow } from "zustand/shallow";
 import clsx from "clsx";
 import useChatStore from "../../providers/ChatProvider";
@@ -18,7 +19,17 @@ import {
 } from "../Shared/ContextMenu";
 
 const StreamerInfo = memo(
-  ({ streamerData, isStreamerLive, chatroomId, userChatroomInfo, settings, updateSettings, handleSearch }) => {
+  ({
+    streamerData,
+    isStreamerLive,
+    chatroomId,
+    userChatroomInfo,
+    settings,
+    updateSettings,
+    handleSearch,
+    compact = false,
+    headerTarget,
+  }) => {
     const [showPinnedMessage, setShowPinnedMessage] = useState(true);
     // const [showPollMessage, setShowPollMessage] = useState(false);
     const [showStreamerCard, setShowStreamerCard] = useState(false);
@@ -26,7 +37,9 @@ const StreamerInfo = memo(
     const refresh7TVEmotes = useChatStore((state) => state.refresh7TVEmotes);
     const refreshKickEmotes = useChatStore((state) => state.refreshKickEmotes);
 
-    const pinDetails = useChatStore(useShallow((state) => state.chatrooms.find((room) => room.id === chatroomId)?.pinDetails));
+    const pinDetails = useChatStore(
+      useShallow((state) => state.chatrooms.find((room) => room.id === chatroomId)?.pinDetails),
+    );
     // const predictions = useChatStore(useShallow((state) => state.chatrooms.find((room) => room.id === chatroomId)?.predictions));
 
     // const pollDetails = useChatStore(useShallow((state) => state.chatrooms.find((room) => room.id === chatroomId)?.pollDetails));
@@ -51,7 +64,8 @@ const StreamerInfo = memo(
       refreshKickEmotes(chatroomId);
     };
 
-    const canModerate = userChatroomInfo?.is_broadcaster || userChatroomInfo?.is_moderator || userChatroomInfo?.is_super_admin;
+    const canModerate =
+      userChatroomInfo?.is_broadcaster || userChatroomInfo?.is_moderator || userChatroomInfo?.is_super_admin;
 
     // F5 to refresh streamer info
     useEffect(() => {
@@ -76,79 +90,90 @@ const StreamerInfo = memo(
       });
     };
 
-    return (
-      <ContextMenu>
-        <ContextMenuTrigger>
-          <div className="chatStreamerInfo">
-            <div className="chatStreamerInfoContent">
-              <span className="streamerName">{streamerData?.user?.username}</span>
-              {isStreamerLive && <span className="liveBadgeDot" />}
-            </div>
+    const header = (
+      <ContextMenuTrigger>
+        <div className={clsx("chatStreamerInfo", { compact })}>
+          {!compact && (
+            <>
+              <div className="chatStreamerInfoContent">
+                <span className="streamerName">{streamerData?.user?.username}</span>
+                {isStreamerLive && <span className="liveBadgeDot" />}
+              </div>
 
-            <div
-              className="chatStreamerLiveStatus"
-              onMouseOver={() => setShowStreamerCard(true)}
-              onMouseLeave={() => setShowStreamerCard(false)}
-              onMouseDown={async (e) => {
-                if (e.button === 1 && streamerData?.slug) {
-                  window.open(`https://kick.com/${streamerData?.slug}`, "_blank");
-                }
-              }}>
-              {isStreamerLive && <span className="chatStreamerLiveStatusTitle">{streamerData?.livestream?.session_title}</span>}
+              <div
+                className="chatStreamerLiveStatus"
+                onMouseOver={() => setShowStreamerCard(true)}
+                onMouseLeave={() => setShowStreamerCard(false)}
+                onMouseDown={async (e) => {
+                  if (e.button === 1 && streamerData?.slug) {
+                    window.open(`https://kick.com/${streamerData?.slug}`, "_blank");
+                  }
+                }}
+              >
+                {isStreamerLive && (
+                  <span className="chatStreamerLiveStatusTitle">{streamerData?.livestream?.session_title}</span>
+                )}
 
-              {showStreamerCard && isStreamerLive && (
-                <div className="chatStreamerCard">
-                  <div className="chatStreamerCardContent">
-                    <div className="chatStreamerCardHeader">
-                      <img
-                        src={streamerData?.livestream?.thumbnail?.url || streamerData?.banner_image?.url}
-                        alt={streamerData?.user?.username}
-                      />
-                    </div>
+                {showStreamerCard && isStreamerLive && (
+                  <div className="chatStreamerCard">
+                    <div className="chatStreamerCardContent">
+                      <div className="chatStreamerCardHeader">
+                        <img
+                          src={streamerData?.livestream?.thumbnail?.url || streamerData?.banner_image?.url}
+                          alt={streamerData?.user?.username}
+                        />
+                      </div>
 
-                    <div className="chatStreamerCardBody">
-                      <span className="chatStreamerCardTitle">{streamerData?.livestream?.session_title}</span>
-                      <p>
-                        Live for {convertDateToHumanReadable(streamerData?.livestream?.created_at)} with{" "}
-                        {streamerData?.livestream?.viewer_count?.toLocaleString() || 0} viewers
-                      </p>
+                      <div className="chatStreamerCardBody">
+                        <span className="chatStreamerCardTitle">{streamerData?.livestream?.session_title}</span>
+                        <p>
+                          Live for {convertDateToHumanReadable(streamerData?.livestream?.created_at)} with{" "}
+                          {streamerData?.livestream?.viewer_count?.toLocaleString() || 0} viewers
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
-            </div>
-            <div className="chatStreamerInfoActions">
-              {canModerate && (
-                <button
-                  className={clsx("chatStreamerInfoModeratorBtn", {
-                    disabled: !settings?.moderation?.quickModTools,
-                  })}
-                  onClick={handleToggleModMode}>
-                  <img src={ModSwordFillIcon} width={20} height={20} alt="Moderator" />
-                </button>
-              )}
+                )}
+              </div>
+            </>
+          )}
+          <div className="chatStreamerInfoActions">
+            {canModerate && (
+              <button
+                className={clsx("chatStreamerInfoModeratorBtn", {
+                  disabled: !settings?.moderation?.quickModTools,
+                })}
+                onClick={handleToggleModMode}
+              >
+                <img src={ModSwordFillIcon} width={20} height={20} alt="Moderator" />
+              </button>
+            )}
 
-              <ChattersBtn chatroomId={chatroomId} streamerData={streamerData} />
+            <ChattersBtn chatroomId={chatroomId} streamerData={streamerData} />
 
-              {pinDetails && (
-                <button
-                  className={clsx("pinnedMessageBtn", pinDetails && "show", showPinnedMessage && "open")}
-                  onClick={() => setShowPinnedMessage(!showPinnedMessage)}>
-                  <img src={PushPin} width={20} height={20} alt="Pin Message" />
-                </button>
-              )}
+            {pinDetails && (
+              <button
+                className={clsx("pinnedMessageBtn", pinDetails && "show", showPinnedMessage && "open")}
+                onClick={() => setShowPinnedMessage(!showPinnedMessage)}
+              >
+                <img src={PushPin} width={20} height={20} alt="Pin Message" />
+              </button>
+            )}
 
-              {/* {showPollMessage && (
+            {/* {showPollMessage && (
                 <button
                   className={clsx("pollMessageBtn", showPollMessage && "open")}
                   onClick={() => setShowPollMessage(!showPollMessage)}>
                   <img src={PollIcon} width={24} height={24} alt="Active Poll" />
                 </button>
               )} */}
-            </div>
           </div>
-        </ContextMenuTrigger>
-
+        </div>
+      </ContextMenuTrigger>
+    );
+    return (
+      <ContextMenu>
+        {compact ? headerTarget && createPortal(header, headerTarget) : header}
         <ContextMenuContent>
           <ContextMenuItem onSelect={handleRefresh7TV}>Refresh 7TV Emotes</ContextMenuItem>
           <ContextMenuItem onSelect={handleRefreshKickEmotes}>Refresh Kick Emotes</ContextMenuItem>
@@ -227,8 +252,8 @@ const ChattersBtn = memo(
     };
 
     return (
-      <button onClick={handleChattersBtn} className="chattersBtn">
-        <img src={UserIcon} width={20} height={20} alt="Pin Message" />
+      <button onClick={handleChattersBtn} className="chattersBtn" aria-label="Chatters" title="Chatters">
+        <img src={UserIcon} width={20} height={20} alt="" />
       </button>
     );
   },

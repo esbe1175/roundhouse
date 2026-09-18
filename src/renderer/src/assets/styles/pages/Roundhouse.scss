@@ -56,10 +56,15 @@
   -webkit-app-region: drag;
 }
 .rh-brand {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--text-secondary);
   font-size: 13px;
 }
 .rh-account {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   margin-left: auto;
@@ -89,6 +94,7 @@
   }
 }
 .rh-window-controls {
+  flex-shrink: 0;
   display: flex;
   margin-left: auto;
   height: 100%;
@@ -402,6 +408,7 @@
   }
 }
 .rh-watch {
+  position: relative;
   flex: 1;
   display: flex;
   min-height: 0;
@@ -478,18 +485,21 @@
   }
 }
 .rh-divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 3;
   width: 7px;
-  flex: 0 0 7px;
-  cursor: col-resize;
-  background: var(--navbar-bg);
+  background: transparent;
   touch-action: none;
-  border-inline: 1px solid var(--border-primary);
-  &:hover,
-  &:focus {
+  &.is-active,
+  &:focus-visible {
     background: var(--text-accent);
+    cursor: col-resize;
   }
 }
 .rh-chat {
+  position: relative;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -528,6 +538,15 @@
     font-size: 11px;
     margin-left: auto;
   }
+}
+.rh-chat .chatStreamerInfo.compact {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.rh-chat-tools {
+  margin-left: auto;
 }
 .rh-fullscreen .rh-watch {
   height: 100vh;

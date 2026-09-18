@@ -1,5 +1,5 @@
 // Desktop integration tests use an isolated profile and explicit Kick fixtures.
-// They never sign in, send a chat message, or mutate a real Kick account.
+// They never sign in, send a real chat message, or mutate a real Kick account.
 const { _electron: electron, expect } = require("@playwright/test");
 const path = require("node:path");
 const fs = require("node:fs");
@@ -77,9 +77,14 @@ const assert = require("node:assert/strict");
       const kick = session.fromPartition("persist:roundhouse-kick");
       kick.cookies.get = async () => [{ name: "session_token", value: "test-only" }];
       global.roundhouseTestRateLimit = false;
-      kick.fetch = async (url) => {
+      global.roundhouseTestMessages = [];
+      kick.fetch = async (url, options = {}) => {
         const pathname = new URL(url).pathname;
         let data;
+        if (options.method === "POST" && pathname.includes("/messages/send/")) {
+          global.roundhouseTestMessages.push(JSON.parse(options.body));
+          return new Response(JSON.stringify({ status: { code: 200 } }), { status: 200 });
+        }
         if (pathname === "/api/v1/user") data = { id: 123, username: "test_viewer" };
         else if (pathname === "/api/v2/channels/followed-page") {
           if (global.roundhouseTestRateLimit) return new Response("{}", { status: 429 });
@@ -200,7 +205,7 @@ const assert = require("node:assert/strict");
           const origin = win.getContentBounds(),
             zoom = win.webContents.getZoomFactor();
           global.roundhouseTestCursor = {
-            x: origin.x + (rect.x + rect.width / 2) * zoom,
+            x: origin.x + (edge === "divider" ? rect.x + rect.width + 3 : rect.x + rect.width / 2) * zoom,
             y:
               origin.y +
               (rect.y + (edge === "top" ? 10 : edge === "bottom" ? rect.height - 10 : rect.height / 2)) * zoom,
@@ -208,7 +213,9 @@ const assert = require("node:assert/strict");
         },
         { rect, edge },
       );
-      if (edge !== "center")
+      if (edge === "divider")
+        await expect(page.getByRole("separator", { name: "Chat width" })).toHaveClass(/is-active/);
+      else if (edge !== "center")
         await expect(page.locator(edge === "top" ? ".rh-watchbar" : ".rh-player-controls")).toHaveClass(/is-visible/);
     };
     await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeEnabled({ timeout: 15000 });
@@ -224,6 +231,36 @@ const assert = require("node:assert/strict");
     await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeEnabled({ timeout: 15000 });
     const videoBefore = await page.locator(".rh-surface").boundingBox();
     assert.equal(videoBefore.height, (await page.locator(".rh-watch").boundingBox()).height);
+    assert.equal(videoBefore.x + videoBefore.width, (await page.locator(".rh-chat").boundingBox()).x);
+    await expect(page.locator(".rh-brand")).toHaveText("Roundhouse: Live channel - A test broadcast");
+    await expect(page).toHaveTitle("Roundhouse: Live channel - A test broadcast");
+    assert.equal(
+      await app.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()
+          .find((win) => win.webContents.getURL().startsWith("file:"))
+          .getTitle(),
+      ),
+      "Roundhouse: Live channel - A test broadcast",
+    );
+    await expect(page.locator(".rh-chat .streamerName, .rh-chat .chatStreamerLiveStatus")).toHaveCount(0);
+    await expect(page.locator(".rh-chat-tabs").getByRole("button", { name: "Chatters", exact: true })).toBeInViewport();
+    const divider = page.getByRole("separator", { name: "Chat width" });
+    await hoverEdge("divider");
+    await expect(divider).toHaveCSS("cursor", "col-resize");
+    await hoverEdge("center");
+    await expect(divider).not.toHaveClass(/is-active/);
+    await expect(divider).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    const dragRect = await divider.boundingBox();
+    const originalWidth = Number(await divider.getAttribute("aria-valuenow"));
+    await page.mouse.move(dragRect.x + 3, dragRect.y + 180);
+    await page.mouse.down();
+    await page.mouse.move(dragRect.x - 57, dragRect.y + 180, { steps: 6 });
+    await expect(divider).toHaveAttribute("aria-valuenow", String(originalWidth + 60));
+    await expect(divider).toHaveClass(/is-active/);
+    await page.mouse.up();
+    await expect(divider).not.toHaveClass(/is-active/);
+    await divider.focus();
+    await page.keyboard.press("Home");
     const input = page.getByRole("textbox", { name: "Chat message" });
     await expect(input).toBeVisible();
     await expect(page.getByRole("button", { name: "Kick emotes", exact: true })).toBeVisible();
@@ -240,6 +277,22 @@ const assert = require("node:assert/strict");
     await page.getByRole("button", { name: "Kick emotes", exact: true }).click();
     await expect(page.locator(".emoteDialog.show")).toBeVisible();
     await input.click();
+    await page.keyboard.press("Control+A");
+    await page.keyboard.press("Backspace");
+    await page.keyboard.type("Fixture first line");
+    await page.keyboard.press("Shift+Enter");
+    await page.keyboard.type("Fixture second line");
+    assert.equal(await app.evaluate(() => global.roundhouseTestMessages.length), 0);
+    await expect(input).toContainText("Fixture second line");
+    await page.keyboard.press("Enter");
+    await expect.poll(() => app.evaluate(() => global.roundhouseTestMessages.length)).toBe(1);
+    assert.equal(
+      await app.evaluate(() => global.roundhouseTestMessages[0].content),
+      "Fixture first line\nFixture second line",
+    );
+    await expect(input).toHaveText("");
+    await page.keyboard.press("Enter");
+    assert.equal(await app.evaluate(() => global.roundhouseTestMessages.length), 1);
     await hoverEdge("bottom");
     assert.deepEqual(await page.locator(".rh-surface").boundingBox(), videoBefore);
     await page.getByRole("button", { name: "Pause", exact: true }).click();
@@ -269,7 +322,6 @@ const assert = require("node:assert/strict");
     await page.locator("summary").click();
     await page.getByRole("button", { name: /Offline channel/ }).click();
     await expect(page.getByRole("heading", { name: "This channel is offline" })).toBeVisible();
-    const divider = page.getByRole("separator", { name: "Chat width" });
     const width = Number(await divider.getAttribute("aria-valuenow"));
     await divider.focus();
     await page.keyboard.press("ArrowLeft");
@@ -295,6 +347,7 @@ const assert = require("node:assert/strict");
     await hoverEdge("top");
     await page.getByRole("button", { name: "← Following" }).click();
     await expect(page.getByRole("heading", { name: "Following" })).toBeVisible();
+    await expect(page).toHaveTitle("Roundhouse");
     assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem("chatrooms") || "[]")), []);
     // A web page does not receive Roundhouse's preload or IPC privileges.
     const untrusted = await app.evaluate(async ({ BrowserWindow }) => {
@@ -310,7 +363,7 @@ const assert = require("node:assert/strict");
     assert.equal(untrusted, "undefined");
     assert.deepEqual(errors, []);
     console.log(
-      "PASS: welcome, login dialog after delayed hydration, login cancellation/retry, validated login completion, private bridge, follows, search, stale results, real embedded MPV with synthetic video, full-height video, edge hover and keyboard overlays, pause, quality, process cleanup, chat draft and emote insertion, narrow composer, offline chat, divider, fullscreen, Back cleanup, isolated remote page.",
+      "PASS: welcome, login dialog, session handoff, private bridge, follows, search, stale results, real embedded MPV with synthetic video, full-height video, edge hover and keyboard overlays, invisible divider hover/drag/cleanup, window title, compact chat header, Enter sends to fixture and Shift+Enter adds newline, emote insertion, narrow composer, pause, quality, process cleanup, offline chat, fullscreen, Back cleanup, isolated remote page.",
     );
   } finally {
     await app.close();

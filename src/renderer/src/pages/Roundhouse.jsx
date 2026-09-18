@@ -76,6 +76,16 @@ export default function Roundhouse() {
   const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
   const [topFocus, setTopFocus] = useState(false),
     [bottomFocus, setBottomFocus] = useState(false);
+  const [draggingDivider, setDraggingDivider] = useState(false);
+  const [chatTools, setChatTools] = useState(null);
+  const dividerDrag = useRef(null);
+  const streamData = useChatStore((state) => state.chatrooms.find((chat) => chat.id === room)?.streamerData);
+  const windowTitle = selected
+    ? `Roundhouse: ${streamData?.user?.username || selected.name}${streamData?.livestream?.session_title || selected.title ? ` - ${streamData?.livestream?.session_title || selected.title}` : ""}`
+    : "Roundhouse";
+  useEffect(() => {
+    document.title = windowTitle;
+  }, [windowTitle]);
   const topBar = useRef(null),
     bottomBar = useRef(null);
   const topShown = !!player.hoverTop || topFocus,
@@ -100,6 +110,7 @@ export default function Roundhouse() {
   const back = useCallback(async () => {
     setTopFocus(false);
     setBottomFocus(false);
+    setDraggingDivider(false);
     generation.current++;
     selectedRef.current = null;
     setSelected(null);
@@ -241,6 +252,7 @@ export default function Roundhouse() {
             visible: !covered && ["playing", "loading"].includes(player.status),
             overlayTop: topShown ? topBar.current?.getBoundingClientRect().height || 0 : 0,
             overlayBottom: bottomShown ? bottomBar.current?.getBoundingClientRect().height || 0 : 0,
+            dividerWidth: fullscreen ? 0 : 7,
           })
           .catch(() => {});
       });
@@ -299,7 +311,9 @@ export default function Roundhouse() {
     <div className={`rh-app ${fullscreen ? "rh-fullscreen" : ""}`}>
       {!fullscreen && (
         <header className="rh-titlebar">
-          <span className="rh-brand">Roundhouse</span>
+          <span className="rh-brand" title={windowTitle}>
+            {windowTitle}
+          </span>
           {account && (
             <div className="rh-account">
               <button
@@ -442,7 +456,8 @@ export default function Roundhouse() {
             {!fullscreen && (
               <>
                 <div
-                  className="rh-divider"
+                  className={`rh-divider ${player.hoverDivider || draggingDivider ? "is-active" : ""}`}
+                  style={{ right: effectiveWidth - 7 }}
                   role="separator"
                   aria-label="Chat width"
                   aria-orientation="vertical"
@@ -450,12 +465,22 @@ export default function Roundhouse() {
                   aria-valuemin={280}
                   aria-valuemax={viewportWidth - 480}
                   tabIndex={0}
-                  onPointerDown={(event) => event.currentTarget.setPointerCapture(event.pointerId)}
+                  onPointerDown={(event) => {
+                    if (event.button !== 0) return;
+                    event.preventDefault();
+                    dividerDrag.current = { x: event.clientX, width: effectiveWidth };
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                    setDraggingDivider(true);
+                  }}
                   onPointerMove={(event) => {
-                    if (event.currentTarget.hasPointerCapture(event.pointerId))
-                      resizeChat(window.innerWidth - event.clientX);
+                    if (event.currentTarget.hasPointerCapture(event.pointerId) && dividerDrag.current)
+                      resizeChat(dividerDrag.current.width + dividerDrag.current.x - event.clientX);
                   }}
                   onPointerUp={(event) => event.currentTarget.releasePointerCapture(event.pointerId)}
+                  onLostPointerCapture={() => {
+                    dividerDrag.current = null;
+                    setDraggingDivider(false);
+                  }}
                   onKeyDown={(event) => {
                     if (["ArrowLeft", "ArrowRight", "Home"].includes(event.key)) {
                       event.preventDefault();
@@ -471,7 +496,7 @@ export default function Roundhouse() {
                     <button className={mentions ? "active" : ""} onClick={() => setMentions(true)}>
                       Mentions
                     </button>
-                    <small>KickTalk</small>
+                    <div className="rh-chat-tools" ref={setChatTools} />
                   </div>
                   <div className="rh-chat-content">
                     {chatError ? (
@@ -485,6 +510,8 @@ export default function Roundhouse() {
                       <Mentions chatroomId={room} setActiveChatroom={() => setMentions(false)} />
                     ) : (
                       <Chat
+                        compactHeader
+                        headerTarget={chatTools}
                         chatroomId={room}
                         kickUsername={account.username}
                         kickId={String(account.id)}

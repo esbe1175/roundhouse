@@ -27,7 +27,6 @@ import { ContentEditable } from "@lexical/react/LexicalContentEditable";
 import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
 import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
-import { $rootTextContent } from "@lexical/text";
 import useChatStore from "../../../providers/ChatProvider";
 
 import EmoteDialogs from "./EmoteDialogs";
@@ -416,8 +415,8 @@ const KeyHandler = ({ chatroomId, onSendMessage, replyInputData, setReplyInputDa
       editor.registerCommand(
         KEY_ENTER_COMMAND,
         (e) => {
-          if (e.shiftKey) return false;
-          e.preventDefault();
+          if (e?.shiftKey || e?.isComposing || editor.isComposing()) return false;
+          e?.preventDefault();
 
           if (emoteSuggestions?.length > 0) {
             const emote = emoteSuggestions[selectedEmoteIndex];
@@ -432,13 +431,13 @@ const KeyHandler = ({ chatroomId, onSendMessage, replyInputData, setReplyInputDa
             return true;
           }
 
-          const content = $rootTextContent();
+          const content = $getRoot().getTextContent();
           if (!content.trim()) return true;
 
           onSendMessage(content);
 
           editor.update(() => {
-            if (!e.ctrlKey) $getRoot().clear();
+            if (!e?.ctrlKey) $getRoot().clear();
           });
 
           // Close reply input if open after entering message
