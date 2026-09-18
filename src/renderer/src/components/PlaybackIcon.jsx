@@ -24,6 +24,12 @@ export default function PlaybackIcon({ kind }) {
       {kind === "muted" && <path d="m16 9 6 6m0-6-6 6" />}
       {kind === "expand" && <path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5" />}
       {kind === "collapse" && <path d="M3 8h5V3m8 0v5h5M8 21v-5H3m18 0h-5v5" />}
+      {kind === "cinema" && (
+        <>
+          <rect x="3" y="4" width="18" height="16" rx="1" />
+          <path d="M16 4v16" />
+        </>
+      )}
     </svg>
   );
 }

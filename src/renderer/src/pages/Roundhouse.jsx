@@ -82,7 +82,13 @@ export default function Roundhouse() {
     [chatError, setChatError] = useState(""),
     [player, setPlayer] = useState(emptyPlayer),
     [fullscreen, setFullscreen] = useState(false),
+    [cinema, setCinema] = useState(false),
     [mentions, setMentions] = useState(false);
+  const videoFullscreen = fullscreen && !cinema;
+  const changeView = (mode) => {
+    setCinema(mode === "cinema");
+    void api.fullscreen(mode !== "windowed");
+  };
   const [width, setWidth] = useState(() => Number(localStorage.getItem("roundhouse.chatWidth")) || 360);
   const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
   const [topFocus, setTopFocus] = useState(false),
@@ -157,7 +163,10 @@ export default function Roundhouse() {
       setReady(true);
     });
     const cleanPlayer = api.onPlayer(setPlayer),
-      cleanFull = api.onFullscreen(setFullscreen);
+      cleanFull = api.onFullscreen((enabled) => {
+        setFullscreen(enabled);
+        if (!enabled) setCinema(false);
+      });
     const cleanAccount = api.onAccount((state) => {
       if (state.user) {
         window.location.reload();
@@ -288,7 +297,7 @@ export default function Roundhouse() {
             visible: !covered && ["playing", "loading"].includes(player.status),
             overlayTop: topShown ? topBar.current?.getBoundingClientRect().height || 0 : 0,
             overlayBottom: Math.min(256, Math.max(bottomHeight, qualityMenu ? rect.bottom - qualityMenu.top : 0)),
-            dividerWidth: fullscreen ? 0 : 7,
+            dividerWidth: videoFullscreen ? 0 : 7,
             titlebarHeight: document.querySelector(".rh-titlebar")?.getBoundingClientRect().height || 0,
           })
           .catch(() => {});
@@ -313,7 +322,7 @@ export default function Roundhouse() {
       mutation.disconnect();
       window.removeEventListener("resize", sync);
     };
-  }, [selected, fullscreen, player.status, topShown, bottomShown]);
+  }, [selected, fullscreen, videoFullscreen, player.status, topShown, bottomShown]);
 
   useEffect(() => {
     const keys = (event) => {
@@ -328,12 +337,12 @@ export default function Roundhouse() {
         event.preventDefault();
         void control("pause");
       }
-      if (event.key === "f") void api.fullscreen(!fullscreen);
+      if (event.key === "f") changeView(videoFullscreen ? "windowed" : "video");
       if (event.key === "m") void control("mute");
     };
     window.addEventListener("keydown", keys);
     return () => window.removeEventListener("keydown", keys);
-  }, [selected, fullscreen, qualityOpen]);
+  }, [selected, fullscreen, videoFullscreen, qualityOpen]);
   const resizeChat = (value) => {
     const next = Math.max(280, Math.min(value, window.innerWidth - 480));
     setWidth(next);
@@ -530,15 +539,24 @@ export default function Roundhouse() {
                 </DropdownMenu>
                 <button
                   className="rh-icon-control"
-                  aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen"}
-                  title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
-                  onClick={() => api.fullscreen(!fullscreen)}
+                  aria-label={fullscreen && cinema ? "Exit cinema" : "Cinema"}
+                  aria-pressed={fullscreen && cinema}
+                  title={fullscreen && cinema ? "Exit cinema" : "Cinema — fullscreen with chat"}
+                  onClick={() => changeView(fullscreen && cinema ? "windowed" : "cinema")}
                 >
-                  <PlaybackIcon kind={fullscreen ? "collapse" : "expand"} />
+                  <PlaybackIcon kind="cinema" />
+                </button>
+                <button
+                  className="rh-icon-control"
+                  aria-label={videoFullscreen ? "Exit fullscreen" : "Fullscreen"}
+                  title={videoFullscreen ? "Exit fullscreen" : "Fullscreen"}
+                  onClick={() => changeView(videoFullscreen ? "windowed" : "video")}
+                >
+                  <PlaybackIcon kind={videoFullscreen ? "collapse" : "expand"} />
                 </button>
               </div>
             </section>
-            {!fullscreen && (
+            {!videoFullscreen && (
               <>
                 <div
                   className={`rh-divider ${player.hoverDivider || draggingDivider ? "is-active" : ""}`}

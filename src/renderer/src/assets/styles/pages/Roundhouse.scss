@@ -490,6 +490,9 @@
     border: 0;
     background: transparent;
     color: var(--text-secondary);
+    &[aria-pressed="true"] {
+      color: var(--text-accent);
+    }
     &:hover {
       background: transparent;
       color: var(--text-primary);
