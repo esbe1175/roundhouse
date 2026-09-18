@@ -74,6 +74,7 @@ const Message = ({
           sender,
           fetchedUser: user?.data,
           chatroomId,
+          chatroomSlug: chatroomName,
           subscriberBadges,
           sevenTVEmotes: allStvEmotes,
           cords: [e.clientX, e.clientY],
@@ -84,6 +85,7 @@ const Message = ({
           sender: message.sender,
           userChatroomInfo,
           chatroomId,
+          chatroomSlug: chatroomName,
           subscriberBadges,
           sevenTVEmotes: allStvEmotes,
           cords: [e.clientX, e.clientY],
@@ -92,7 +94,7 @@ const Message = ({
         });
       }
     },
-    [message?.sender, userChatroomInfo, chatroomId, userStyle, subscriberBadges, allStvEmotes, username],
+    [message?.sender, userChatroomInfo, chatroomId, chatroomName, userStyle, subscriberBadges, allStvEmotes, username],
   );
 
   const rgbaObjectToString = (rgba) => {

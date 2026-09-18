@@ -121,6 +121,7 @@ if (process.contextIsolated) {
           };
 
           ipcRenderer.on("userDialog:data", handler);
+          ipcRenderer.send("userDialog:ready");
           return () => ipcRenderer.removeListener("userDialog:data", handler);
         },
       },

@@ -549,6 +549,18 @@
 .rh-chat-tools {
   margin-left: auto;
 }
+.rh-chat .pinnedMessage,
+.rh-chat .poll {
+  position: relative;
+  top: auto;
+  left: auto;
+  right: auto;
+  flex: 0 0 auto;
+  margin: 8px;
+  width: calc(100% - 16px);
+  max-height: 40%;
+  overflow-y: auto;
+}
 .rh-fullscreen .rh-watch {
   height: 100vh;
 }

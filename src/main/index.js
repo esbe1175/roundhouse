@@ -5,6 +5,7 @@ import { setupRoundhouse, account, player, installIPCGuard, openWebLink } from "
 
 import store from "../../utils/config";
 import fs from "fs";
+import { popupBounds } from "../../utils/ui-geometry.mjs";
 installIPCGuard();
 
 const isDev = process.env.NODE_ENV === "development";
@@ -31,6 +32,8 @@ let replyThreadInfo = null;
 
 let mainWindow = null;
 let userDialog = null;
+let userDialogData = null;
+let userDialogReady = false;
 let authDialog = null;
 let chattersDialog = null;
 let settingsDialog = null;
@@ -562,26 +565,28 @@ ipcMain.handle("logout", async () => {
 
 // User Dialog Handler
 ipcMain.handle("userDialog:open", (e, { data }) => {
+  userDialogData = { ...data, pinned: false };
   dialogInfo = {
     chatroomId: data.chatroomId,
     userId: data.sender.id,
   };
 
-  const mainWindowPos = mainWindow.getPosition();
-  const newX = mainWindowPos[0] + data.cords[0] - 150;
-  const newY = mainWindowPos[1] + data.cords[1] - 100;
+  const source = BrowserWindow.fromWebContents(e.sender) || mainWindow;
+  const origin = source.getContentBounds(), zoom = source.webContents.getZoomFactor();
+  const point = { x: Math.round(origin.x + (Number(data.cords?.[0]) || 0) * zoom),
+    y: Math.round(origin.y + (Number(data.cords?.[1]) || 0) * zoom) };
+  const bounds = popupBounds(point, screen.getDisplayNearestPoint(point).workArea);
 
   if (userDialog) {
-    userDialog.setPosition(newX, newY);
-    userDialog.webContents.send("userDialog:data", { ...data, pinned: false });
+    userDialog.setBounds(bounds);
+    userDialog.setAlwaysOnTop(false);
+    userDialog.show();
+    if (userDialogReady) userDialog.webContents.send("userDialog:data", userDialogData);
     return;
   }
 
   userDialog = new BrowserWindow({
-    width: 600,
-    height: 600,
-    x: newX,
-    y: newY,
+    ...bounds,
     show: false,
     resizable: false,
     frame: false,
@@ -611,7 +616,6 @@ ipcMain.handle("userDialog:open", (e, { data }) => {
     userDialog.setVisibleOnAllWorkspaces(false);
     userDialog.focus();
 
-    userDialog.webContents.send("userDialog:data", { ...data, pinned: false });
     userDialog.webContents.setWindowOpenHandler((details) => {
       void openWebLink(details.url).catch(() => {});
       return { action: "deny" };
@@ -628,7 +632,20 @@ ipcMain.handle("userDialog:open", (e, { data }) => {
     setAlwaysOnTop(mainWindow);
     dialogInfo = null;
     userDialog = null;
+    userDialogData = null;
+    userDialogReady = false;
   });
+});
+
+// Deliver the latest selection only after React has subscribed, including rapid opens.
+ipcMain.on("userDialog:ready", (event) => {
+  if (userDialog?.webContents !== event.sender) return;
+  userDialogReady = true;
+  if (userDialogData) event.sender.send("userDialog:data", userDialogData);
+});
+
+ipcMain.on("userDialog:close", (event) => {
+  if (userDialog?.webContents === event.sender) userDialog.close();
 });
 
 ipcMain.handle("userDialog:pin", async (e, forcePinState) => {

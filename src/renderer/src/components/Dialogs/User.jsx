@@ -5,6 +5,7 @@ import clsx from "clsx";
 import Message from "../Messages/Message";
 import Pin from "../../assets/icons/push-pin-fill.svg?asset";
 import ArrowUpRight from "../../assets/icons/arrow-up-right-bold.svg?asset";
+import Close from "../../assets/icons/x-bold.svg?asset";
 import Copy from "../../assets/icons/copy-simple-fill.svg?asset";
 import BanIcon from "../../assets/icons/gavel-fill.svg?asset";
 import UnbanIcon from "../../assets/icons/circle-slash.svg?asset";
@@ -39,67 +40,63 @@ const User = () => {
     }
   });
 
-  const loadData = async ({
-    sender,
-    chatroomId,
-    pinned,
-    userStyle,
-    cords,
-    subscriberBadges,
-    userChatroomInfo,
-    sevenTVEmotes,
-    fetchedUser = null,
-  }) => {
+  const loadGeneration = useRef(0);
+  const latestData = useRef(null);
+  const [profileError, setProfileError] = useState("");
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [avatarFailed, setAvatarFailed] = useState(false);
+  const loadData = async (data) => {
+    const generation = ++loadGeneration.current;
+    latestData.current = data;
+    setUserProfile(null);
+    setUserLogs([]);
+    setAvatarFailed(false);
+    setProfileError("");
+    setProfileLoading(true);
+    setIsDialogPinned(data.pinned || false);
+    let rooms = [];
     try {
-      const chatrooms = JSON.parse(localStorage.getItem("chatrooms")) || [];
-      const currentChatroom = chatrooms.find((chatroom) => chatroom.id === chatroomId);
-      const settings = await window.app.store.get();
-
-      setSettings(settings);
-      setDialogData({
-        sender,
-        chatroomId,
-        pinned,
-        userStyle,
-        cords,
-        fetchedUser,
-        subscriberBadges,
-        userChatroomInfo,
-        chatroom: currentChatroom,
-      });
-      setDialogUserStyle(userStyle);
-      setSevenTVEmotes(sevenTVEmotes || currentChatroom?.channel7TVEmotes || []);
-      setSubscriberBadges(currentChatroom?.streamerData?.subscriber_badges || []);
-
-      const messages = await window.app.logs.get({ chatroomId: chatroomId, userId: sender.id });
-
-      setUserLogs(messages);
-
-      // Fetch User Profile in Channel
-      if (!fetchedUser) {
-        const { data: user } = await window.app.kick.getUserChatroomInfo(currentChatroom?.slug, sender?.username);
-        setUserProfile(user);
-      } else {
-        setUserProfile(fetchedUser);
-      }
-
-      // Silenced User Data
-      const silencedUsersData = JSON.parse(localStorage.getItem("silencedUsers")) || { data: [] };
-      setSilencedUsers(silencedUsersData);
-
-      const isSilenced = silencedUsersData.data?.some((user) => user.id === sender.id);
-      setIsUserSilenced(isSilenced);
-
-      // Pin starts unpinned
-      await window.app.userDialog.pin(pinned || false);
-      setIsDialogPinned(pinned || false);
-    } catch (error) {
-      console.error("[User Dialog]: Error loading user dialog data:", error);
+      rooms = JSON.parse(localStorage.getItem("chatrooms") || "[]");
+    } catch {
+      /* Use the selection's channel. */
     }
+    const storedRoom = rooms.find((room) => room.id === data.chatroomId);
+    const chatroom = storedRoom || { slug: data.chatroomSlug, username: data.chatroomSlug };
+    setDialogData({ ...data, chatroom });
+    setDialogUserStyle(data.userStyle);
+    setSevenTVEmotes(data.sevenTVEmotes || storedRoom?.channel7TVEmotes || []);
+    setSubscriberBadges(data.subscriberBadges || storedRoom?.streamerData?.subscriber_badges || []);
+    const results = await Promise.allSettled([
+      window.app.store.get(),
+      window.app.logs.get({ chatroomId: data.chatroomId, userId: data.sender.id }),
+      data.fetchedUser
+        ? Promise.resolve({ data: data.fetchedUser })
+        : chatroom.slug
+          ? window.app.kick.getUserChatroomInfo(chatroom.slug, data.sender.username)
+          : Promise.reject(new Error("Channel details are unavailable.")),
+    ]);
+    if (generation !== loadGeneration.current) return;
+    if (results[0].status === "fulfilled") setSettings(results[0].value);
+    if (results[1].status === "fulfilled") setUserLogs(results[1].value || []);
+    if (results[2].status === "fulfilled" && results[2].value?.data) {
+      const profile = results[2].value.data;
+      setUserProfile(profile.data || profile);
+    } else setProfileError("Profile details could not be loaded.");
+    setProfileLoading(false);
+    let silenced = { data: [] };
+    try {
+      silenced = JSON.parse(localStorage.getItem("silencedUsers")) || silenced;
+    } catch {
+      /* No cached muted users. */
+    }
+    setSilencedUsers(silenced);
+    setIsUserSilenced(silenced.data?.some((user) => user.id === data.sender.id));
   };
 
   const updateData = (data) => {
     setUserLogs((prevLogs) => {
+      if (data?.userId !== latestData.current?.sender?.id || data?.chatroomId !== latestData.current?.chatroomId)
+        return prevLogs;
       if (!data?.logs?.length) return prevLogs;
       const existingIds = new Set(prevLogs.map((msg) => msg.id));
       const newLogs = data.logs.filter((msg) => !existingIds.has(msg.id));
@@ -112,8 +109,14 @@ const User = () => {
   useEffect(() => {
     const dataCleanup = window.app.userDialog.onData(loadData);
     const updateCleanup = window.app.logs.onUpdate(updateData);
+    const escape = (event) => {
+      if (event.key === "Escape") window.app.userDialog.close();
+    };
+    window.addEventListener("keydown", escape);
 
     return () => {
+      loadGeneration.current++;
+      window.removeEventListener("keydown", escape);
       dataCleanup();
       updateCleanup();
     };
@@ -172,7 +175,17 @@ const User = () => {
         <div className="dialogHeader">
           <div className="dialogHeaderUser">
             <div className="dialogHeaderUserImage">
-              <img src={userProfile?.profile_pic || "https://kick.com/img/default-profile-pictures/default2.jpeg"} />
+              {!avatarFailed && (userProfile?.profile_pic || dialogData?.sender?.profile_pic) ? (
+                <img
+                  src={userProfile?.profile_pic || dialogData?.sender?.profile_pic}
+                  alt={`${dialogData?.sender?.username} avatar`}
+                  onError={() => setAvatarFailed(true)}
+                />
+              ) : (
+                <span className="dialogAvatarFallback" role="img" aria-label="No profile picture">
+                  {dialogData?.sender?.username?.slice(0, 2).toUpperCase() || "?"}
+                </span>
+              )}
             </div>
             <div className="dialogHeaderUserInfo">
               <div className="dialogHeaderUserInfoProfile">
@@ -180,7 +193,11 @@ const User = () => {
                 {(userBadges?.length > 0 || dialogData?.userStyle?.badge) && (
                   <div className="dialogHeaderUserBadges">
                     {dialogData?.userStyle?.badge && (
-                      <StvBadges badge={dialogData?.userStyle?.badge} className="dialogHeaderUserBadges" tooltip={false} />
+                      <StvBadges
+                        badge={dialogData?.userStyle?.badge}
+                        className="dialogHeaderUserBadges"
+                        tooltip={false}
+                      />
                     )}
                     {userBadges?.length > 0 && (
                       <KickBadges
@@ -194,6 +211,18 @@ const User = () => {
                 )}
               </div>
 
+              {profileLoading && <p role="status">Loading profile�</p>}
+              {profileError && (
+                <p role="alert">
+                  {profileError}{" "}
+                  <button
+                    className="dialogProfileRetry"
+                    onClick={() => loadData({ ...latestData.current, pinned: isDialogPinned })}
+                  >
+                    Retry
+                  </button>
+                </p>
+              )}
               <div className="dialogHeaderUserDates">
                 <div className="dialogHeaderDate">
                   <p>Following since:</p>
@@ -211,9 +240,11 @@ const User = () => {
                 <div className="dialogHeaderDate">
                   <p>Subscribed for</p>
                   <span>
-                    {userProfile?.subscribed_for > 1 || userProfile?.subscribed_for < 1
-                      ? `${userProfile?.subscribed_for} months`
-                      : `${userProfile?.subscribed_for} month`}
+                    {userProfile?.subscribed_for == null
+                      ? "Not available"
+                      : userProfile.subscribed_for !== 1
+                        ? `${userProfile?.subscribed_for} months`
+                        : `${userProfile?.subscribed_for} month`}
                     .
                   </span>
                 </div>
@@ -229,7 +260,8 @@ const User = () => {
                   kickUsername?.replaceAll("-", "_").toLowerCase() === dialogData?.sender?.username?.toLowerCase() ||
                   !kickUsername
                 }
-                onClick={silenceUser}>
+                onClick={silenceUser}
+              >
                 <span>{isUserSilenced ? "Unmute User" : "Mute User"}</span>
                 <div className="checkBox">
                   <img src={Check} width={14} height={14} alt="Check" />
@@ -241,7 +273,8 @@ const User = () => {
                   // TODO: Fix different underscores effects
                   const transformedUsername = dialogData?.sender?.username.toLowerCase();
                   window.open(`https://kick.com/${transformedUsername}`, "_blank", "noopener,noreferrer");
-                }}>
+                }}
+              >
                 Open Channel <img src={ArrowUpRight} width={18} height={18} />
               </button>
             </div>
@@ -253,8 +286,12 @@ const User = () => {
                     <button
                       className="dialogHeaderModActionsBtn"
                       onClick={() => {
-                        window.app.modActions.getUnbanUser(dialogData?.chatroom?.username, dialogData?.sender?.username);
-                      }}>
+                        window.app.modActions.getUnbanUser(
+                          dialogData?.chatroom?.username,
+                          dialogData?.sender?.username,
+                        );
+                      }}
+                    >
                       <img src={UnbanIcon} width={16} height={16} alt="Unban" />
                     </button>
                   </TooltipTrigger>
@@ -291,7 +328,8 @@ const User = () => {
                       className="dialogHeaderModActionsBtn"
                       onClick={() => {
                         window.app.modActions.getBanUser(dialogData?.chatroom?.username, dialogData?.sender?.username);
-                      }}>
+                      }}
+                    >
                       <img src={BanIcon} width={16} height={16} alt="Ban" />
                     </button>
                   </TooltipTrigger>
@@ -304,12 +342,21 @@ const User = () => {
           </div>
 
           <div className="dialogOptions">
+            <button
+              className="dialogOptionsButton"
+              aria-label="Close user"
+              title="Close (Escape)"
+              onClick={() => window.app.userDialog.close()}
+            >
+              <img src={Close} width={16} height={16} alt="" />
+            </button>
             <button className={clsx("dialogOptionsButton", isDialogPinned ? "pinned" : "")} onClick={handlePinToggle}>
               <img src={Pin} width={16} height={16} alt="Pin" />
             </button>
             <button
               className="dialogOptionsButton"
-              onClick={() => navigator.clipboard.writeText(dialogData?.sender?.username ?? "N/A")}>
+              onClick={() => navigator.clipboard.writeText(dialogData?.sender?.username ?? "N/A")}
+            >
               <img src={Copy} width={16} height={16} alt="Copy" />
             </button>
           </div>
