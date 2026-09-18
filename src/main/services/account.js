@@ -1,5 +1,6 @@
 import { BrowserWindow, session } from "electron";
 import { collectFollows } from "./channels.mjs";
+import { openKickLogin } from "./login-page";
 
 export class KickAccount {
   user = null;
@@ -114,7 +115,22 @@ export class KickAccount {
       webPreferences: { session: this.session, nodeIntegration: false, contextIsolation: true, sandbox: true },
     }));
     win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-    win.loadURL("https://kick.com/");
+    win.on("page-title-updated", (event) => event.preventDefault());
+    win.webContents.setAudioMuted(true);
+    let loginError = null;
+    let dialogOpened = false;
+    win.webContents.on("did-finish-load", async () => {
+      if (dialogOpened || new URL(win.webContents.getURL()).origin !== "https://kick.com") return;
+      try {
+        dialogOpened = await win.webContents.executeJavaScript(`(${openKickLogin.toString()})()`);
+        loginError = dialogOpened
+          ? null
+          : "Kick's login dialog could not be opened automatically. Try again and select Log In in the Kick window.";
+      } catch {
+        // Navigation (including a website challenge) can replace the document.
+        // The next completed Kick page gets its own attempt.
+      }
+    });
     this.loginPromise = new Promise((resolve) => {
       let busy = false;
       const timer = setInterval(async () => {
@@ -133,8 +149,14 @@ export class KickAccount {
       win.on("closed", () => {
         clearInterval(timer);
         this.loginWindow = null;
-        resolve({ user: this.user });
+        resolve({ user: this.user, error: loginError });
       });
+    });
+    void win.loadURL("https://kick.com/").catch((error) => {
+      // Kick may replace the initial navigation during a browser check.
+      if (win.isDestroyed() || error.code === "ERR_ABORTED") return;
+      loginError = "Could not load Kick's sign-in page. Check your connection and try again.";
+      win.close();
     });
     return this.loginPromise;
   }

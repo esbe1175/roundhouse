@@ -22,6 +22,54 @@ const assert = require("node:assert/strict");
     page.on("pageerror", (error) => errors.push(error.message));
     await expect(page.getByRole("button", { name: "Sign in to Kick", exact: true })).toBeVisible();
     assert.equal(await page.evaluate(() => "getToken" in window.app.auth), false);
+    // Reproduce Kick's server-rendered homepage followed by delayed hydration.
+    // The real login window must open the dialog, not merely load the homepage.
+    await app.evaluate(({ session }) => {
+      session.fromPartition("persist:roundhouse-kick").protocol.handle(
+        "https",
+        () =>
+          new Response(
+            `<!doctype html><title>Kick homepage fixture</title>
+          <button data-testid="login" hidden onclick="window.wrongClicks++">Hidden login</button>
+          <button id="login" data-testid="login">Log In</button>
+          <button onclick="window.wrongClicks++">Sign Up</button>
+          <script>
+            window.wrongClicks = 0; window.loginClicks = 0; window.submits = 0;
+            setTimeout(() => {
+              document.getElementById('login').onclick = () => {
+                window.loginClicks++;
+                if (document.querySelector('form')) return;
+                const form = document.createElement('form');
+                form.innerHTML = '<input type="password"><button data-testid="login-submit">Log In</button>';
+                form.onsubmit = (event) => { event.preventDefault(); window.submits++; };
+                document.body.append(form);
+              };
+            }, 1600);
+          </script>`,
+            { headers: { "content-type": "text/html" } },
+          ),
+      );
+    });
+    const openLogin = async () => {
+      const nextWindow = app.waitForEvent("window");
+      await page.getByRole("button", { name: "Sign in to Kick", exact: true }).click();
+      const login = await nextWindow;
+      await expect(login.locator('[data-testid="login-submit"]')).toBeVisible({ timeout: 12000 });
+      assert.equal(await login.evaluate(() => typeof window.app), "undefined");
+      assert.equal(await login.evaluate(() => window.wrongClicks + window.submits), 0);
+      return login;
+    };
+    const cancelledLogin = await openLogin();
+    await cancelledLogin.waitForTimeout(2200);
+    assert.equal(await cancelledLogin.evaluate(() => window.loginClicks), 1);
+    await cancelledLogin.close();
+    await expect(page.getByRole("button", { name: "Sign in to Kick", exact: true })).toBeEnabled();
+    const completedLogin = await openLogin();
+    // Keep third-party fixtures in place before account validation reloads the UI.
+    await page.route("https://**/*", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: "[]" }),
+    );
+    await page.routeWebSocket(/wss:.*/, (socket) => socket.close());
     await app.evaluate(({ session, app }) => {
       const kick = session.fromPartition("persist:roundhouse-kick");
       kick.cookies.get = async () => [{ name: "session_token", value: "test-only" }];
@@ -115,12 +163,7 @@ const assert = require("node:assert/strict");
         return child;
       };
     });
-    // Prevent third-party requests and sockets in this fixture-only test.
-    await page.route("https://**/*", (route) =>
-      route.fulfill({ status: 200, contentType: "application/json", body: "[]" }),
-    );
-    await page.routeWebSocket(/wss:.*/, (socket) => socket.close());
-    await page.reload();
+    await expect.poll(() => completedLogin.isClosed(), { timeout: 15000 }).toBe(true);
     await expect(page.getByRole("heading", { name: "Following" })).toBeVisible({ timeout: 20000 });
     await expect(page.getByText("A test broadcast", { exact: true })).toBeVisible();
     await page.screenshot({ path: ".cache/overview.png" });
@@ -190,7 +233,7 @@ const assert = require("node:assert/strict");
     assert.equal(untrusted, "undefined");
     assert.deepEqual(errors, []);
     console.log(
-      "PASS: welcome, private bridge, follows, search, stale results, real embedded MPV with synthetic video, pause, quality, process cleanup, offline chat, divider, fullscreen, Back cleanup, isolated remote page.",
+      "PASS: welcome, login dialog after delayed hydration, login cancellation/retry, validated login completion, private bridge, follows, search, stale results, real embedded MPV with synthetic video, pause, quality, process cleanup, offline chat, divider, fullscreen, Back cleanup, isolated remote page.",
     );
   } finally {
     await app.close();

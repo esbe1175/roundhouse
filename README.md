@@ -49,7 +49,7 @@ Kick's followed-channel and playback website endpoints are undocumented. Unexpec
 
 ## Verification and remaining live checks
 
-Automated checks cover pagination, normalization, invalid IPC inputs, HLS quality parsing, fragmented/out-of-order MPV replies, and disconnected commands. Desktop integration tests use a separate temporary profile, fixture Kick responses, and actual MPV playing generated video. They cover follows/search, stale results, pause, quality selection, rapid open/stop, cleanup, offline chat, resizing, fullscreen, and the absence of application privileges in a remote page. Native tests exercise video output, controls, visibility, and resizing at 100% and 150% scaling.
+Automated checks cover pagination, normalization, invalid IPC inputs, HLS quality parsing, fragmented/out-of-order MPV replies, and disconnected commands. Desktop integration tests use a separate temporary profile, fixture Kick responses, and actual MPV playing generated video. They cover opening the login dialog after delayed page hydration, cancellation/retry, validated session handoff, follows/search, stale results, pause, quality selection, rapid open/stop, cleanup, offline chat, resizing, fullscreen, and the absence of application privileges in a remote page. Native tests exercise video output, controls, visibility, and resizing at 100% and 150% scaling.
 
 Fixture tests do **not** prove Kick's current live login/API behavior. User-assisted acceptance still needs a real login, actual followed-channel comparison, restart/session reuse, a live stream with chat, and deliberate chat actions. Tests never send a message, vote, or moderate a real channel.
 

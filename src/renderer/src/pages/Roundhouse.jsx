@@ -145,6 +145,7 @@ export default function Roundhouse() {
     try {
       const state = await api.login();
       if (state.user) window.location.reload();
+      else if (state.error) setError(state.error);
     } catch (err) {
       setError(err.message);
     } finally {
