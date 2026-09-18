@@ -70,6 +70,13 @@ const assert = require("node:assert/strict");
       route.fulfill({ status: 200, contentType: "application/json", body: "[]" }),
     );
     await page.routeWebSocket(/wss:.*/, (socket) => socket.close());
+    await page.route("https://files.kick.com/emotes/**", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "image/svg+xml",
+        body: '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><circle cx="32" cy="32" r="30" fill="#53fc18"/></svg>',
+      }),
+    );
     await page.route("https://media.fixture/fresh-thumbnail.svg*", (route) =>
       route.fulfill({
         status: 200,
@@ -116,8 +123,37 @@ const assert = require("node:assert/strict");
             ],
           };
         } else if (pathname.endsWith("/me")) data = { is_following: true, subscription: null, roles: [], banned: null };
-        else if (pathname.endsWith("/messages")) data = { data: { messages: [] } };
-        else if (pathname.endsWith("/polls")) data = { status: { code: 404 } };
+        else if (pathname.endsWith("/messages")) {
+          const sender = { id: 700, username: "FixtureViewer", identity: { color: "#53fc18", badges: [] } };
+          const messages = ["A fixture chat message", "[emote:123:TestSmile]"].map((content, i) => ({
+            id: `fixture-${i}`,
+            chatroom_id: pathname.includes("/1/") ? 11 : 12,
+            type: "message",
+            content,
+            sender,
+            metadata: "null",
+            created_at: new Date().toISOString(),
+          }));
+          data = {
+            data: {
+              messages,
+              pinned_message: {
+                message: { ...messages[0], content: "Fixture pinned notice" },
+                pinned_by: sender,
+              },
+            },
+          };
+        } else if (pathname.includes("/users/")) {
+          if (global.roundhouseTestProfileFailure) return new Response("{}", { status: 503 });
+          if (global.roundhouseTestProfileDelay) await new Promise((resolve) => setTimeout(resolve, 350));
+          data = {
+            id: 700,
+            username: pathname.split("/").at(-1),
+            profile_pic: global.roundhouseTestAvatar || null,
+            following_since: "2024-02-22T00:00:00Z",
+            subscribed_for: 11,
+          };
+        } else if (pathname.endsWith("/polls")) data = { status: { code: 404 } };
         else if (pathname.startsWith("/emotes"))
           data = [{ name: "Emojis", emotes: [{ id: 123, name: "TestSmile", subscribers_only: false }] }];
         else if (pathname.includes("silenced-users")) data = [];
@@ -347,6 +383,7 @@ const assert = require("node:assert/strict");
     await expect(input).toHaveText("");
     await page.keyboard.press("Enter");
     assert.equal(await app.evaluate(() => global.roundhouseTestMessages.length), 1);
+    await require("./chat-ui.cjs")({ app, page, errors });
     // Background-window hover must expose both bars before any activating click.
     await app.evaluate(() => {
       global.roundhouseTestFocused = false;

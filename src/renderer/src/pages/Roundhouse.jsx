@@ -498,6 +498,8 @@ export default function Roundhouse() {
                       Mentions
                     </button>
                     <div className="rh-chat-tools" ref={setChatTools} />
+                    <button className="rh-chat-filter-button" title="Chat filters" aria-label="Chat filters"
+                      onClick={() => window.app.settingsDialog.open({ userData: account, section: "filters" })}><img src={Gear} alt="" width={16} height={16} /></button>
                   </div>
                   <div className="rh-chat-content">
                     {chatError ? (

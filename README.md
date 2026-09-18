@@ -14,6 +14,10 @@ Hover near the video's top edge to reveal the title and Back button, or its bott
 
 The window title shows the current channel and stream title. Chat tools sit beside the chat tabs. The video/chat boundary has an invisible seven-pixel drag target that turns green on hover, drag, or keyboard focus. In chat, Enter sends the message and Shift+Enter inserts a new line.
 
+**Settings → Chat → Filters** (also the gear beside the chat tabs) offers hidden usernames, per-user repeat limits, selected/all-emote filtering, and ordered text rules with Block or Replace actions. Text rules include a live preview and capture groups. Filters start paused; enable them when ready. Changes save automatically across channels. Choose Hide or a muted red highlight for filtered messages. Pins and system notices remain visible, and replacement rules only change displayed text, preserving the original for replies and moderation.
+
+Pins sit directly below the chat tabs. Hover previews stay inside the chat pane, clear of the native video surface. User profiles open within the display's usable area, with an explicit close button and Escape support. Missing or failed avatars use local initials, and failed profile requests offer Retry.
+
 ## Development (PowerShell)
 
 Requires Windows x64, Node 24, Python 3, and Visual Studio C++ build tools with a Windows SDK. Use the pinned npm lockfile.

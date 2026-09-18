@@ -1,6 +1,8 @@
 import Store from "electron-store";
+import { DEFAULTS as FILTER_DEFAULTS } from "./chat-filters.mjs";
 
 const schema = {
+  chatFilters: { type: "object", default: FILTER_DEFAULTS },
   kickId: {
     type: "string",
     default: "",

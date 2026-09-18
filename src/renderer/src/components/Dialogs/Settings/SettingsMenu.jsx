@@ -11,7 +11,8 @@ const SettingsMenu = ({ activeSection, setActiveSection, onLogout }) => (
             className={clsx("settingsMenuSectionItemBtn", "settingsMenuSectionAppInfo", {
               active: activeSection === "info",
             })}
-            onClick={() => setActiveSection("info")}>
+            onClick={() => setActiveSection("info")}
+          >
             <span>About KickTalk</span>
             <img src={KickTalkLogo} width={16} height={16} alt="KickTalk Logo" />
           </button>
@@ -25,7 +26,8 @@ const SettingsMenu = ({ activeSection, setActiveSection, onLogout }) => (
         <div className="settingsMenuSectionItem">
           <button
             className={clsx("settingsMenuSectionItemBtn", { active: activeSection === "general" })}
-            onClick={() => setActiveSection("general")}>
+            onClick={() => setActiveSection("general")}
+          >
             General
           </button>
         </div>
@@ -38,8 +40,15 @@ const SettingsMenu = ({ activeSection, setActiveSection, onLogout }) => (
         <div className="settingsMenuSectionItem">
           <button
             className={clsx("settingsMenuSectionItemBtn", { active: activeSection === "moderation" })}
-            onClick={() => setActiveSection("moderation")}>
+            onClick={() => setActiveSection("moderation")}
+          >
             Moderation
+          </button>
+          <button
+            className={clsx("settingsMenuSectionItemBtn", { active: activeSection === "filters" })}
+            onClick={() => setActiveSection("filters")}
+          >
+            Filters
           </button>
           {/* <button
             disabled

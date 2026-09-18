@@ -73,7 +73,7 @@ const RegularMessage = memo(
       () => (
         <MessageParser
           type={type}
-          message={message}
+          message={message.displayContent === undefined ? message : { ...message, content: message.displayContent }}
           chatroomId={chatroomId}
           chatroomName={chatroomName}
           sevenTVEmotes={sevenTVEmotes}

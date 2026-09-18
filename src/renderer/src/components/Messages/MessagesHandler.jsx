@@ -3,6 +3,7 @@ import { Virtuoso } from "react-virtuoso";
 import useChatStore from "../../providers/ChatProvider";
 import Message from "./Message";
 import MouseScroll from "../../assets/icons/mouse-scroll-fill.svg?asset";
+import { FilterSession } from "../../../../../utils/chat-filters.mjs";
 
 const MessagesHandler = memo(
   ({
@@ -23,18 +24,21 @@ const MessagesHandler = memo(
     const [silencedUserIds, setSilencedUserIds] = useState(new Set());
     const [atBottom, setAtBottom] = useState(true);
     const [isPaused, setIsPaused] = useState(false);
+    const filters = useRef({ room: chatroomId, session: new FilterSession() });
 
     const filteredMessages = useMemo(() => {
       if (!messages?.length) return [];
 
-      return messages.filter((message) => {
+      if (filters.current.room !== chatroomId) filters.current = { room: chatroomId, session: new FilterSession() };
+      const visible = messages.filter((message) => {
         if (message?.chatroom_id != chatroomId) return false;
         if (message?.type === "system" || message?.type === "mod_action") return true;
         if (message?.type !== "reply" && message?.type !== "message") return true;
 
         return message?.sender?.id && !silencedUserIds.has(message?.sender?.id);
       });
-    }, [messages, chatroomId, silencedUserIds]);
+      return filters.current.session.apply(visible, settings?.chatFilters, allStvEmotes);
+    }, [messages, chatroomId, silencedUserIds, settings?.chatFilters, allStvEmotes]);
 
     const handleScroll = useCallback(
       (e) => {
@@ -76,24 +80,41 @@ const MessagesHandler = memo(
         }
 
         return (
-          <Message
-            key={message?.id}
-            data-message-id={message.id}
-            message={message}
-            chatroomId={chatroomId}
-            chatroomName={slug}
-            subscriberBadges={subscriberBadges}
-            allStvEmotes={allStvEmotes}
-            existingKickTalkBadges={kickTalkBadges}
-            settings={settings}
-            userChatroomInfo={userChatroomInfo}
-            username={username}
-            userId={userId}
-            donators={donators}
-          />
+          <div
+            className={message.filterReason ? "rh-filtered-message" : undefined}
+            data-filter-reason={message.filterReason || undefined}
+            title={message.filterReason ? `Filtered: ${message.filterReason}` : undefined}
+          >
+            <Message
+              key={message?.id}
+              data-message-id={message.id}
+              message={message}
+              chatroomId={chatroomId}
+              chatroomName={slug}
+              subscriberBadges={subscriberBadges}
+              allStvEmotes={allStvEmotes}
+              existingKickTalkBadges={kickTalkBadges}
+              settings={settings}
+              userChatroomInfo={userChatroomInfo}
+              username={username}
+              userId={userId}
+              donators={donators}
+            />
+          </div>
         );
       },
-      [chatroomId, slug, subscriberBadges, allStvEmotes, kickTalkBadges, settings, userChatroomInfo, username, userId, donators],
+      [
+        chatroomId,
+        slug,
+        subscriberBadges,
+        allStvEmotes,
+        kickTalkBadges,
+        settings,
+        userChatroomInfo,
+        username,
+        userId,
+        donators,
+      ],
     );
 
     useEffect(() => {
@@ -130,7 +151,12 @@ const MessagesHandler = memo(
     );
 
     return (
-      <div className="chatContainer" style={{ height: "100%", flex: 1 }} ref={chatContainerRef} data-chatroom-id={chatroomId}>
+      <div
+        className="chatContainer"
+        style={{ height: "100%", flex: 1 }}
+        ref={chatContainerRef}
+        data-chatroom-id={chatroomId}
+      >
         <Virtuoso
           ref={virtuosoRef}
           data={filteredMessages}

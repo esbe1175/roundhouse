@@ -8,6 +8,7 @@ import SettingsHeader from "./SettingsHeader";
 import SettingsMenu from "./SettingsMenu";
 import AboutSection from "./Sections/About";
 import { ModerationSection } from "./Sections/Moderation";
+import Filters from "./Sections/Filters";
 
 const Settings = () => {
   const { updateSettings, settings } = useSettings();
@@ -25,6 +26,7 @@ const Settings = () => {
 
   useEffect(() => {
     const handleDialogData = (data) => {
+      if (data?.section === "filters") setActiveSection("filters");
       if (JSON.stringify(data?.settings) !== JSON.stringify(settingsData)) {
         setSettingsData(data?.settings);
       }
@@ -63,6 +65,7 @@ const Settings = () => {
           <SettingsMenu activeSection={activeSection} setActiveSection={setActiveSection} onLogout={handleLogout} />
 
           <div className="settingsContent">
+            {activeSection === "filters" && <Filters settingsData={settingsData} onChange={changeSetting} />}
             {activeSection === "info" && <AboutSection appInfo={appInfo} />}
             {activeSection === "general" && (
               <>
