@@ -203,10 +203,13 @@
 .chatMessageUser {
   display: inline-flex;
   word-break: break-all;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
+  max-width: 100%;
   vertical-align: middle;
 
   > .chatMessageUsername {
+    min-width: 0;
+    max-width: 100%;
     display: inline;
     font-weight: 800;
     cursor: pointer;
