@@ -1,0 +1,13 @@
+{
+  "FFmpeg-LICENSE.txt": "https://raw.githubusercontent.com/FFmpeg/FFmpeg/9fc8c785e/LICENSE.md",
+  "https-proxy-agent-5-MIT.txt": "https://raw.githubusercontent.com/TooTallNate/node-https-proxy-agent/5.0.1/README.md",
+  "mpv-LGPL-2.1.txt": "https://raw.githubusercontent.com/mpv-player/mpv/69e63f425a/LICENSE.LGPL",
+  "mpv-GPL-2.0.txt": "https://raw.githubusercontent.com/mpv-player/mpv/69e63f425a/LICENSE.GPL",
+  "react-remove-scroll-bar-MIT.txt": "https://raw.githubusercontent.com/theKashey/react-remove-scroll-bar/master/LICENSE",
+  "Phosphor-MIT.txt": "https://raw.githubusercontent.com/phosphor-icons/core/main/LICENSE",
+  "mpv-Copyright.txt": "https://raw.githubusercontent.com/mpv-player/mpv/69e63f425a/Copyright",
+  "agent-base-6-MIT.txt": "https://raw.githubusercontent.com/TooTallNate/node-agent-base/6.0.2/README.md",
+  "FFmpeg-GPL-3.0.txt": "https://raw.githubusercontent.com/FFmpeg/FFmpeg/9fc8c785e/COPYING.GPLv3",
+  "Radix-MIT.txt": "https://raw.githubusercontent.com/radix-ui/primitives/main/LICENSE",
+  "Inter-OFL-1.1.txt": "https://raw.githubusercontent.com/rsms/inter/master/LICENSE.txt"
+}

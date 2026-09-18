@@ -6,7 +6,15 @@ $cache = Join-Path $root '.cache'
 $destination = Join-Path $root 'resources/mpv'
 New-Item -ItemType Directory -Force -Path $cache,$destination | Out-Null
 $archive = Join-Path $cache ('mpv-' + $manifest.release + '.7z')
-if (-not (Test-Path -LiteralPath $archive)) { Invoke-WebRequest -Uri $manifest.url -OutFile $archive }
+if (-not (Test-Path -LiteralPath $archive)) {
+    $partialArchive = $archive + '.download'
+    try {
+        Invoke-WebRequest -Uri $manifest.url -OutFile $partialArchive
+        Move-Item -LiteralPath $partialArchive -Destination $archive -Force
+    } finally {
+        if (Test-Path -LiteralPath $partialArchive) { Remove-Item -LiteralPath $partialArchive -Force }
+    }
+}
 $stream = [System.IO.File]::OpenRead($archive)
 $hasher = [System.Security.Cryptography.SHA256]::Create()
 try { $actualHash = [BitConverter]::ToString($hasher.ComputeHash($stream)).Replace('-', '').ToLowerInvariant() }

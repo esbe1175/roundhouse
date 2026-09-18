@@ -2,5 +2,9 @@
   "provider": "shinchiro/mpv-winbuild-cmake",
   "release": "20260903",
   "url": "https://github.com/shinchiro/mpv-winbuild-cmake/releases/download/20260903/mpv-x86_64-20260903-git-69e63f425a.7z",
-  "sha256": "418dbfb5feb851cbed33d6c05d8481ba71802621bfd6efe8974522b28d42ac97"
+  "sha256": "418dbfb5feb851cbed33d6c05d8481ba71802621bfd6efe8974522b28d42ac97",
+  "source": "https://github.com/mpv-player/mpv/tree/69e63f425a",
+  "ffmpegSource": "https://github.com/FFmpeg/FFmpeg/tree/9fc8c785e",
+  "buildSource": "https://github.com/shinchiro/mpv-winbuild-cmake/tree/cd1edc11dc6887a50f705717619d879f5a93a488",
+  "buildRun": "https://github.com/shinchiro/mpv-winbuild-cmake/actions/runs/33697571182"
 }

@@ -7,8 +7,17 @@ files:
   - out/**
   - package.json
   - LICENSE
-  - THIRD_PARTY.md
+  - README.md
+  - THIRD_PARTY_NOTICES.md
 extraResources:
+  - from: LICENSE
+    to: licenses/Roundhouse-GPL-3.0.txt
+  - from: THIRD_PARTY_NOTICES.md
+    to: licenses/THIRD_PARTY_NOTICES.md
+  - from: resources/licenses
+    to: licenses/upstream
+  - from: .cache/notices
+    to: licenses/generated
   - from: resources/mpv
     to: mpv
   - from: native/build/Release/roundhouse_host.node

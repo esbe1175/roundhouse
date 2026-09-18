@@ -2,6 +2,37 @@
 
 A personal Windows stream viewer built from KickTalk: your followed channels, an embedded MPV player, and KickTalk chat in one resizable window.
 
+## Fresh clone: one setup command
+
+**Supported target: Windows 10/11 x64.** Install the prerequisites below once, then run these commands in PowerShell. Replace the quoted repository placeholder with your Roundhouse remote URL or a local repository path; cloning KickTalk itself will not include Roundhouse's changes.
+
+```powershell
+git clone "YOUR_ROUNDHOUSE_REPOSITORY_URL" Roundhouse
+Set-Location Roundhouse
+npm run setup -- --run
+```
+
+No separate `npm install`, MPV download, `.env`, Kick developer application, or API credentials are needed. Sign in to Kick inside the built app.
+
+`setup` works before `node_modules` exists. It checks prerequisites, runs `npm ci` using the committed lockfile, installs the pinned Electron binary, downloads and verifies the pinned MPV archive, compiles the Windows native host for Electron, generates dependency notices, builds the production app, and verifies the resulting package. `--run` launches the app when finished. Omit it to build only. Allow several minutes and several GB of free space for dependencies, compiler output, and binary caches; initial setup needs internet access.
+
+To produce an installer in the same operation:
+
+```powershell
+npm run setup -- --installer
+```
+
+The unpacked app is `dist/win-unpacked/Roundhouse.exe`; the optional installer is `dist/Roundhouse-0.1.0-setup.exe`. To copy an unpacked build, copy the **whole `win-unpacked` directory**, including `resources`, DLLs, and license files. Close Roundhouse before rebuilding that output directory.
+
+### Prerequisites
+
+1. [Git for Windows](https://git-scm.com/download/win).
+2. [Node.js 24 LTS, x64](https://nodejs.org/en/download), including npm. `.nvmrc` records the supported major version; Node 24.14.1 is tested.
+3. [Python 3](https://www.python.org/downloads/windows/), version 3.10 or newer; 3.13 is tested. Install its launcher or add Python to `PATH`.
+4. [Visual Studio 2022 Build Tools](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022), or Visual Studio 2022 Community, with **Desktop development with C++**, the **MSVC v143 x64/x86 tools**, and a **Windows 10 or 11 SDK**. The native MPV surface requires this compiler. The .NET workload alone is insufficient.
+
+Install these system tools once and reopen PowerShell so `PATH` changes take effect. Setup reports missing prerequisites rather than installing system-wide tools or requesting administrator access. You do not need a separate MPV, FFmpeg, CMake, or 7-Zip installation. The pinned `7zip-bin` npm dependency supplies the extractor. See [node-gyp's Windows setup](https://github.com/nodejs/node-gyp#on-windows) for compiler/Python detection details.
+
 ## Run
 
 The built app is `dist/win-unpacked/Roundhouse.exe`. The installer is `dist/Roundhouse-0.1.0-setup.exe`.
@@ -20,17 +51,35 @@ Pins sit directly below the chat tabs. Hover previews stay inside the chat pane,
 
 ## Development (PowerShell)
 
-Requires Windows x64, Node 24, Python 3, and Visual Studio C++ build tools with a Windows SDK. Use the pinned npm lockfile.
+After the initial setup:
 
 ```powershell
-npm ci
-node node_modules/electron/install.js
-npm run setup:mpv
-npm run build:native
 npm run dev
 ```
 
-The explicit Electron install command supports Electron releases that use an opt-in binary installer. MPV is downloaded from the exact release in `resources/mpv-manifest.json`; setup verifies its SHA-256 before extracting it. Binaries and native output are ignored by Git. MPV is never registered as a system file handler.
+For a clean reinstall after pulling dependency changes, rerun `npm run setup`. This recreates `node_modules` from the lockfile and rebuilds generated output; it does not clear your Roundhouse login/profile. Use `npm ci` rather than maintaining a second lockfile.
+
+| Task                           | Purpose                                                    |
+| ------------------------------ | ---------------------------------------------------------- |
+| `npm run setup`                | Fresh-clone install and unpacked production build          |
+| `npm run setup -- --run`       | Setup, then launch the packaged app                        |
+| `npm run setup -- --installer` | Setup plus Windows installer                               |
+| `npm run dev`                  | Electron/React development with hot reload                 |
+| `npm run build`                | Compile JS/CSS only; requires installed dependencies       |
+| `npm run build:unpack`         | Refresh MPV, native host, notices and unpacked app         |
+| `npm run build:win`            | The same plus the NSIS installer                           |
+| `npm run setup:mpv`            | Download/check/extract the pinned MPV archive              |
+| `npm run build:native`         | Recompile the Windows host for the locked Electron version |
+| `npm run notices`              | Regenerate npm dependency notices                          |
+| `npm run verify:package`       | Check packaged resources, notices, and secret exclusion    |
+
+### MPV version and download verification
+
+[resources/mpv-manifest.json](resources/mpv-manifest.json) is the source of truth. It pins shinchiro's **20260903** standard x86_64 build, its exact release URL, SHA-256, player source revision and build provenance. Setup downloads into `.cache`, hashes the archive **before extraction**, and fails on mismatch. Incomplete downloads use a temporary file and are not reused. Valid archives are reused on subsequent builds. The executable and support files go in ignored `resources/mpv/`, then outside the application archive under the packaged `resources/mpv/` directory.
+
+Roundhouse does not fetch a moving “latest” release, register MPV as a file handler, or run the distributor's updater/registration scripts. To update the player deliberately, change the release URL and verified SHA-256 together, update the source/license provenance, rebuild, and rerun native and desktop tests. The build compiles Roundhouse's host module; it **downloads a prebuilt MPV**, rather than compiling MPV and FFmpeg from source.
+
+### Checks
 
 ```powershell
 npm run lint
@@ -39,9 +88,29 @@ npm run build
 npm run test:desktop
 npm run test:native
 npm run build:win
+npm run verify:package
 ```
 
-`build:win` creates both the unpacked application and an NSIS installer. `build:unpack` produces only the unpacked application. Publishing and KickTalk's upstream updater are disabled.
+Desktop/native tests open temporary windows and use isolated fixture profiles. They never send messages to a real channel. To test the packaged app specifically:
+
+```powershell
+$env:ROUNDHOUSE_TEST_EXE = (Resolve-Path 'dist/win-unpacked/Roundhouse.exe').Path
+npm run test:desktop
+Remove-Item Env:ROUNDHOUSE_TEST_EXE
+```
+
+Publishing and KickTalk's upstream updater are disabled. `.github/workflows/build.yml` runs the fresh-clone setup, lint, unit tests and package verification on Windows when hosted on GitHub; it does not publish a release. Interactive desktop/native tests are run locally.
+
+### Troubleshooting
+
+- **`npm.ps1` execution-policy error:** use `npm.cmd run setup` (and `npm.cmd` for other tasks). There is no need to weaken the system execution policy.
+- **Compiler/SDK missing:** modify your Visual Studio installation to include the C++ workload and Windows SDK, reopen PowerShell, and rerun setup.
+- **Python not found or wrong version:** run `py --list-paths`, then set `$env:npm_config_python = 'C:\path\to\python.exe'` before setup.
+- **Download/network failure:** setup needs npm, GitHub release downloads, Electron downloads, and Electron headers. Check your proxy/firewall and rerun; it does not bypass TLS verification.
+- **MPV checksum mismatch:** delete only the named `.cache/mpv-<release>.7z` archive and rerun `npm run setup:mpv`. Do not replace the expected hash merely to accept an unexpected file.
+- **Build cannot overwrite a file:** close Roundhouse and any development/test MPV process, then retry. Keep the project in a normal writable local directory.
+- **Native module/Electron version mismatch:** run `npm run setup` after a lockfile change. The host must be rebuilt for Electron, not for the system Node ABI.
+- **Kick sign-in/challenge/API failure:** build success does not bypass Kick's website checks. Return to the welcome sign-in flow if the saved session expires.
 
 ## Architecture and account data
 
@@ -65,4 +134,18 @@ Fixture tests do **not** prove Kick's current live login/API behavior. User-assi
 
 This repository preserves KickTalk history through `a3570be165618f70449257bbb70df7cd16b66efe`. `main` contains Roundhouse changes; `upstream` points to KickTalk. No personal remote or published release is configured. Review upstream changes and merge deliberately; do not replace Roundhouse files with a newer release archive.
 
-Original KickTalk design and development: Dark and ftk789. See `LICENSE` and `THIRD_PARTY.md` for attribution and MPV provenance.
+`.gitignore` excludes `.env` and private keys, downloaded binaries, dependencies, native/generated builds, temporary profiles, logs, crash dumps and test output. Only placeholder credentials belong in `.env.example`. Commit source, the npm lockfile, the MPV manifest and license documents. `private: true` in `package.json` prevents accidental npm publication; it does not prevent using a public Git repository. Add your own `origin` when you choose a hosting destination; no hosted repository is created by setup.
+
+## License and acknowledgements
+
+Roundhouse is distributed under the **GNU General Public License, version 3**, inherited from KickTalk. [LICENSE](LICENSE) preserves the upstream license text unchanged. Third-party components retain their own licenses; [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) records attribution, versions, source links and license locations.
+
+Thank you to:
+
+- **Dark, ftk789 and the KickTalk contributors** for the application, design language and full chat experience.
+- **The mpv/MPlayer/mplayer2 contributors and shinchiro** for the player and Windows distribution, and **FFmpeg/libplacebo contributors** for media and rendering work.
+- **Electron, Chromium, React, Lexical, Radix/WorkOS**, and the maintainers of our other npm dependencies for the application platform and controls.
+- **The Inter Project Authors and Phosphor Icons** for typography and icons inherited through KickTalk.
+- **Kick and 7TV** for the platform, community emotes and cosmetics. Roundhouse is an independent project and is not endorsed by these services.
+
+Builds include readable notices under `resources/licenses/`, plus Electron's `LICENSE.electron.txt` and `LICENSES.chromium.html` beside the executable. The MPV notices describe the scope of the supplied upstream license texts and the additional corresponding-source/notices work needed when distributing third-party binary releases.
