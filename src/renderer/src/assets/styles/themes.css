@@ -1,5 +1,74 @@
-/* Default Green Theme */
+/* Roundhouse default: Kick charcoal surfaces with green accents. Shared by
+   the overview, original KickTalk chat, and separate settings windows. */
 :root {
+  --scrollbar-primary: #737780;
+  --scrollbar-secondary: #474a50;
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: #73778077;
+  --loader-bg: #191b1d;
+  --tooltip-bg: #27292c;
+  --tooltip-border: #44474c;
+  --tooltip-text: #f1f1f1;
+  --slider-track: #44474c;
+  --slider-range: #53fc18;
+  --slider-thumb: #f1f1f1;
+  --slider-thumb-border: transparent;
+  --update-btn-bg: #53fc18;
+  --switch-checked: #53fc18;
+  --switch-unchecked: #44474c;
+  --navbar-bg: #191b1d;
+  --pin-poll-message-bg: #27292c;
+  --pin-poll-message-border: 1px solid #3a3d43;
+  --pin-poll-text: #b6bbc2;
+  --emote-dialog-bg: #202225;
+  --emote-dialog-border: #3a3d43;
+  --bg-primary: #191b1d;
+  --bg-secondary: #3a3d43;
+  --bg-tertiary: #27292c;
+  --bg-input: #202225;
+  --bg-hover: #303338;
+  --bg-active: #44474c;
+  --bg-selected: #3a3d43;
+  --bg-overlay: #191b1df2;
+  --bg-dialog: #191b1d;
+  --bg-dialog-secondary: #202225;
+  --bg-dialog-tertiary: #27292c;
+  --bg-error: #27292c;
+  --text-primary: #efeff1;
+  --text-secondary: #d3d5d8;
+  --text-tertiary: #b6bbc2;
+  --text-muted: #737780;
+  --text-accent: #53fc18;
+  --text-success: #53fc18;
+  --border-primary: #35383d;
+  --border-secondary: #54575c;
+  --border-hover: #737780;
+  --border-bg-hover: #ffffff14;
+  --border-focus: #53fc18;
+  --border-dialog: #3a3d43;
+  --dropdown-bg: #27292c;
+  --dropdown-border: #44474c;
+  --dropdown-item-bg: #3a3d43;
+  --highlight-bg: var(--notification-bg-color, #53fc1814);
+  --shadow-primary: none;
+  --shadow-secondary: none;
+  --shadow-elevated: 0 4px 16px #0006;
+  --shadow-dialog: 0 4px 16px #0006;
+  --message-bg: transparent;
+  --message-bg-hover: #ffffff05;
+  --btn-primary-bg: #53fc18;
+  --btn-primary-text: #111;
+  --btn-primary-hover: #45dc10;
+  --btn-secondary-bg: #3a3d43;
+  --btn-secondary-border: #54575c;
+  --input-bg: #27292c;
+  --input-info-bar: #303338;
+  --input-focus: #35383d;
+  --input-caret: #efeff1;
+}
+
+/* Original KickTalk green theme remains available in Settings. */
+[data-theme="green"] {
   --scrollbar-primary: #5e846c;
   --scrollbar-secondary: #3d5647;
   --scrollbar-track: #ffffff26;

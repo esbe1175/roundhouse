@@ -252,6 +252,11 @@ const GeneralSection = ({ settingsData, onChange }) => {
                     Default
                   </DropdownMenuItem>
                   <DropdownMenuItem
+                    onClick={() => onChange("customTheme", { ...settingsData?.customTheme, current: "green" })}
+                    value="green">
+                    Green
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
                     onClick={() => onChange("customTheme", { ...settingsData?.customTheme, current: "dark" })}
                     value="dark">
                     Dark

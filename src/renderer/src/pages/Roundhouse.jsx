@@ -3,6 +3,13 @@ import { useSettings } from "../providers/SettingsProvider";
 import useChatStore from "../providers/ChatProvider";
 import Chat from "../components/Chat";
 import Mentions from "../components/Dialogs/Mentions";
+import Minus from "../assets/icons/minus-bold.svg?asset";
+import Square from "../assets/icons/square-bold.svg?asset";
+import Close from "../assets/icons/x-bold.svg?asset";
+import Gear from "../assets/icons/gear-fill.svg?asset";
+import SignOut from "../assets/icons/sign-out-bold.svg?asset";
+import User from "../assets/icons/user-fill.svg?asset";
+import Play from "../assets/icons/play-fill.svg?asset";
 import "../assets/styles/pages/ChatPage.scss";
 import "../assets/styles/pages/Roundhouse.scss";
 
@@ -16,23 +23,32 @@ function ChannelCard({ channel, onOpen }) {
         {channel.thumbnail ? (
           <img src={channel.thumbnail} alt="" loading="lazy" />
         ) : (
-          <span className="rh-monogram">{channel.name.slice(0, 1).toUpperCase()}</span>
+          <img className="rh-placeholder" src={Play} alt="" />
         )}
-        {channel.live && <span className="rh-live">LIVE</span>}
-        {channel.live && channel.viewers !== null && (
-          <span className="rh-viewers">{new Intl.NumberFormat().format(channel.viewers)} watching</span>
+        {channel.live && (
+          <span className="rh-live">
+            <i />
+            {channel.viewers !== null
+              ? new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }).format(
+                  channel.viewers,
+                )
+              : "LIVE"}
+          </span>
         )}
+        {!channel.live && <span className="rh-offline-label">Offline</span>}
       </div>
       <div className="rh-card-info">
         {channel.avatar ? (
           <img className="rh-avatar" src={channel.avatar} alt="" />
         ) : (
-          <span className="rh-avatar rh-initial">{channel.name.slice(0, 1)}</span>
+          <span className="rh-avatar rh-initial">
+            <img src={User} alt="" />
+          </span>
         )}
         <div>
           <strong>{channel.name}</strong>
-          <p title={channel.title}>{channel.title}</p>
-          <small>{channel.category || (channel.live ? "Live now" : "Open chat")}</small>
+          {channel.title && <p title={channel.title}>{channel.title}</p>}
+          {channel.category && <small className="rh-category">{channel.category}</small>}
         </div>
       </div>
     </button>
@@ -268,19 +284,33 @@ export default function Roundhouse() {
     <div className={`rh-app ${fullscreen ? "rh-fullscreen" : ""}`}>
       {!fullscreen && (
         <header className="rh-titlebar">
-          <span className="rh-brand">
-            <span className="rh-logo">R</span> Roundhouse
-          </span>
-          <span className="rh-caption">YOUR CHANNELS. YOUR SPACE.</span>
+          <span className="rh-brand">Roundhouse</span>
+          {account && (
+            <div className="rh-account">
+              <button
+                className="rh-account-settings"
+                title="Settings"
+                aria-label="Settings"
+                onClick={() => window.app.settingsDialog.open({ userData: account })}
+              >
+                {account.profile_pic && <img className="rh-account-avatar" src={account.profile_pic} alt="" />}
+                <span>{account.username}</span>
+                <img src={Gear} alt="" />
+              </button>
+              <button title="Sign out" aria-label="Sign out" onClick={() => window.app.logout()}>
+                <img src={SignOut} alt="" />
+              </button>
+            </div>
+          )}
           <div className="rh-window-controls">
             <button aria-label="Minimize" onClick={() => window.app.minimize()}>
-              −
+              <img src={Minus} alt="" />
             </button>
             <button aria-label="Maximize" onClick={() => window.app.maximize()}>
-              □
+              <img src={Square} alt="" />
             </button>
             <button aria-label="Close" onClick={() => window.app.close()}>
-              ×
+              <img src={Close} alt="" />
             </button>
           </div>
         </header>
@@ -291,18 +321,8 @@ export default function Roundhouse() {
         </main>
       ) : !account ? (
         <main className="rh-welcome">
-          <div className="rh-logo rh-logo-large">R</div>
-          <small>WELCOME TO ROUNDHOUSE</small>
-          <h1>
-            A little closer to
-            <br />
-            your favorite streams.
-          </h1>
-          <p>
-            Your follows, an MPV player, and KickTalk chat.
-            <br />
-            Together in one quiet space.
-          </p>
+          <h1>Sign in to Roundhouse</h1>
+          <p>Watch your followed channels and join chat with your Kick account.</p>
           <button className="rh-primary" disabled={loginBusy} onClick={login}>
             {loginBusy ? "Finish signing in with Kick…" : "Sign in to Kick"}
           </button>
@@ -322,7 +342,6 @@ export default function Roundhouse() {
                 <strong>{selected.name}</strong>
                 <span>{selected.title}</span>
               </div>
-              <button onClick={() => window.app.settingsDialog.open({ userData: account })}>Settings</button>
             </nav>
           )}
           {error && (
@@ -336,7 +355,6 @@ export default function Roundhouse() {
               <div className="rh-surface" ref={surface}>
                 {!["playing"].includes(player.status) && (
                   <div className="rh-player-message">
-                    <span className="rh-logo">R</span>
                     <h2>
                       {player.status === "loading"
                         ? "Connecting to the stream…"
@@ -348,7 +366,7 @@ export default function Roundhouse() {
                               ? "Playback needs attention"
                               : "Ready to watch"}
                     </h2>
-                    <p>{player.error || (player.status === "offline" ? "Chat is still here." : "Powered by MPV")}</p>
+                    {player.error && <p>{player.error}</p>}
                     {["error", "ended", "offline"].includes(player.status) && (
                       <button onClick={() => void control("retry")}>Retry stream</button>
                     )}
@@ -452,23 +470,25 @@ export default function Roundhouse() {
         <main className="rh-overview" ref={overview}>
           <div className="rh-overview-heading">
             <div>
-              <small>YOUR CORNER OF KICK</small>
-              <h1>
-                Following<span>{channels.length}</span>
-              </h1>
-              <p>Good company. Nothing extra.</p>
-            </div>
-            <div className="rh-account">
-              <span>{account.username}</span>
-              <button onClick={() => window.app.settingsDialog.open({ userData: account })}>Settings</button>
-              <button onClick={() => window.app.logout()}>Sign out</button>
+              <h1>Following</h1>
             </div>
           </div>
           <div className="rh-toolbar">
             <label>
-              <span>⌕</span>
+              <svg
+                aria-hidden="true"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <circle cx="10.5" cy="10.5" r="6.5" />
+                <path d="m16 16 5 5" />
+              </svg>
               <input
-                placeholder="Find a followed channel…"
+                placeholder="Search followed channels"
                 aria-label="Search followed channels"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -493,9 +513,8 @@ export default function Roundhouse() {
           <section>
             <div className="rh-section-heading">
               <h2>
-                <i /> Live now <span>{live.length}</span>
+                Live channels <span>{live.length}</span>
               </h2>
-              <small>FROM YOUR FOLLOWED CHANNELS</small>
             </div>
             {live.length ? (
               <div className="rh-grid">
@@ -510,7 +529,7 @@ export default function Roundhouse() {
                   : query
                     ? "No live channels match your search."
                     : channels.length
-                      ? "Your followed channels are taking a break."
+                      ? "None of your followed channels are live."
                       : "Your followed channels will appear here."}
               </div>
             )}
@@ -527,9 +546,6 @@ export default function Roundhouse() {
               </div>
             </details>
           )}
-          <footer>
-            Made for your way of watching.<span>KickTalk + MPV</span>
-          </footer>
         </main>
       )}
     </div>
