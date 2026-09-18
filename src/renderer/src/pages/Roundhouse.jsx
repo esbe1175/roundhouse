@@ -477,13 +477,15 @@ export default function Roundhouse() {
                     <h2>
                       {player.status === "loading"
                         ? "Connecting to the stream…"
-                        : player.status === "offline"
-                          ? "This channel is offline"
-                          : player.status === "ended"
-                            ? "The stream has ended"
-                            : player.status === "error"
-                              ? "Playback needs attention"
-                              : "Ready to watch"}
+                        : player.status === "reconnecting"
+                          ? "Reconnecting to the stream…"
+                          : player.status === "offline"
+                            ? "This channel is offline"
+                            : player.status === "ended"
+                              ? "Playback was interrupted"
+                              : player.status === "error"
+                                ? "Playback needs attention"
+                                : "Ready to watch"}
                     </h2>
                     {player.error && <p>{player.error}</p>}
                     {["error", "ended", "offline"].includes(player.status) && (
@@ -534,8 +536,21 @@ export default function Roundhouse() {
                   onValueChange={([volume]) => void control("volume", volume)}
                 />
                 <button onClick={() => void control("live")}>● Live</button>
-                <span className="rh-player-status">
-                  {player["paused-for-cache"] ? "Buffering" : player.status === "playing" ? "MPV" : player.status}
+                <span
+                  className="rh-player-status"
+                  title={
+                    player.fallback
+                      ? "The low latency connection failed repeatedly. Standard HLS is keeping the stream playing. Retry stream or return to Live to try low latency again."
+                      : undefined
+                  }
+                >
+                  {player["paused-for-cache"]
+                    ? "Buffering"
+                    : player.status === "playing"
+                      ? player.fallback
+                        ? "HLS fallback"
+                        : "MPV"
+                      : player.status}
                 </span>
                 <div
                   className="rh-low-latency"
@@ -546,7 +561,7 @@ export default function Roundhouse() {
                     id="rh-low-latency"
                     aria-label="Low latency"
                     checked={!!player.lowLatency}
-                    disabled={player.status === "loading"}
+                    disabled={["loading", "reconnecting"].includes(player.status)}
                     onCheckedChange={(checked) => void control("lowLatency", checked)}
                   />
                 </div>

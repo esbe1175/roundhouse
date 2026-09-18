@@ -63,6 +63,10 @@ Kick's IVS playlists advertise unfinished segments using `EXT-X-PREFETCH`. Regul
 
 The transport falls back to ordinary HLS if the playlist does not support this prefetch format. The fallback starts at the newest completed segment. No account cookies are passed to the media CDN or local transport. Kick's [public API](https://docs.kick.com/apis/livestreams) does not provide a separate low-latency viewer URL; the account-resolved playback URL remains the source. Streamlink's [Kick integration](https://github.com/streamlink/streamlink/blob/master/src/streamlink/plugins/kick.py) was a useful protocol reference.
 
+Temporary playlist failures are retried without restarting video. If playback is interrupted, Roundhouse checks Kick's current live status and resolves fresh media, retrying after 1, 3 and 8 seconds while retaining your playback preferences and chat connection. A second recovery attempt with low latency enabled uses standard HLS for that viewing session, indicated by **HLS fallback**; **Live** or **Retry stream** tries the preferred transport again. The retry budget resets after 30 seconds of stable playback. Back, logout and stream switching cancel pending retries. MPV reaching the end of a connection alone never marks the channel offline.
+
+Playback diagnostics are stored in `%APPDATA%\Roundhouse\logs\playback.log`, with one rotated `.1` file (approximately 256 KiB each). They record failure stages, HTTP status codes and recovery attempts, excluding media URLs, cookies, account data and chat messages. Custom `--user-data-dir` profiles keep these logs inside their own `logs` folder.
+
 A live comparison on September 18, 2026 measured the prefetch route approximately **2.47 seconds ahead** of the previous MPV route on the same Odablock rendition. This is an improvement over our old playback path, not a measurement against Kick's web player or a promise of a specific end-to-end delay. Kick's encoding, CDN and the network still matter.
 
 ### Ambient glow and Roundhouse settings

@@ -8,6 +8,8 @@ import store from "../../../utils/config";
 import { latencyOptions } from "./playback-options.mjs";
 import { LowLatencyStream } from "./low-latency.mjs";
 import { GLOW_DEFAULTS } from "../../../utils/glow-settings.mjs";
+import { PlaybackRecovery, shouldRecoverEnd } from "./playback-recovery.mjs";
+import { PlaybackLog } from "./playback-log.mjs";
 
 export class Player {
   constructor(account) {
@@ -25,6 +27,29 @@ export class Player {
       ambientFalloff: store.get("ambientFalloff"),
     };
     this.generation = 0;
+    this.log = new PlaybackLog(() => join(app.getPath("userData"), "logs"));
+    this.recovery = new PlaybackRecovery({
+      retry: (attempt) => {
+        if (this.slug)
+          void this.open(this.slug, {
+            quality: this.state.quality,
+            pause: this.state.pause,
+            recovering: true,
+            forceHls: this.forceHls || (this.state.lowLatency && attempt >= 2),
+          });
+      },
+      waiting: (attempt, total, delay) => {
+        this.log.record("reconnect-scheduled", { attempt, delay, transport: this.state.transport });
+        this.emit({ status: "reconnecting", error: `Connection interrupted. Reconnecting (${attempt}/${total})…` });
+      },
+      exhausted: () => {
+        this.log.record("reconnect-exhausted");
+        this.emit({
+          status: "error",
+          error: "Could not restore playback. Check your connection, then retry the stream.",
+        });
+      },
+    });
   }
   emit(patch) {
     Object.assign(this.state, patch);
@@ -96,12 +121,16 @@ export class Player {
     this.transport?.close();
     this.transport = null;
     this.emit({ transport: "hls" });
-    if (!this.state.lowLatency) return url;
+    if (!this.state.lowLatency || this.forceHls) return url;
     const generation = this.generation;
     const transport = new LowLatencyStream({
       onFailure: (error) => {
-        if (generation === this.generation && this.transport === transport) this.emit({ status: "error", error });
+        if (generation === this.generation && this.transport === transport) {
+          this.log.record("transport-failure", error);
+          this.recovery.failure();
+        }
       },
+      onDiagnostic: (details) => this.log.record("transport-retry", details),
     });
     this.transport = transport;
     try {
@@ -117,20 +146,23 @@ export class Player {
         throw error;
       }
       // Ordinary HLS remains playable when prefetch is absent/unsupported.
+      this.log.record("prefetch-unavailable", error);
     }
     transport.close();
     this.transport = null;
     return url;
   }
-  async open(slug, { quality = "auto", pause = false } = {}) {
+  async open(slug, { quality = "auto", pause = false, recovering = false, forceHls = false } = {}) {
     if (typeof slug !== "string" || !/^[a-zA-Z0-9_-]+$/.test(slug)) throw new Error("Invalid channel.");
     const generation = ++this.generation;
+    if (!recovering) this.recovery.reset();
+    this.forceHls = forceHls;
     this.slug = slug;
     await this.dispose();
     if (generation !== this.generation) return;
     this.emit({
-      status: "loading",
-      error: null,
+      status: recovering ? "reconnecting" : "loading",
+      error: recovering ? this.state.error : null,
       qualities: [],
       quality,
       pause,
@@ -138,11 +170,24 @@ export class Player {
       ambientColors: null,
       hoverTop: false,
       hoverBottom: false,
+      fallback: forceHls,
+    });
+    this.log.record(recovering ? "reconnect-start" : "playback-start", {
+      generation,
+      lowLatency: this.state.lowLatency,
+      fallback: forceHls,
+      paused: pause,
     });
     try {
-      const { data } = await this.account.request(`/api/v2/channels/${slug}`);
+      const { data } = await this.account.request(`/api/v2/channels/${slug}`, { cache: "no-store" });
       if (generation !== this.generation) return;
+      if (!data || typeof data !== "object" || !Object.hasOwn(data, "livestream"))
+        throw Object.assign(new Error("Kick did not return the channel's live status. Retry the stream."), {
+          code: "KICK_ERROR",
+        });
       if (!data.livestream || data.livestream.is_live === false) {
+        this.recovery.halt();
+        this.log.record("channel-offline");
         this.emit({ status: "offline" });
         return;
       }
@@ -187,15 +232,19 @@ export class Player {
         { windowsHide: true, stdio: "ignore" },
       ));
       child.on("error", () => {
-        if (generation === this.generation) this.emit({ status: "error", error: "Could not start MPV." });
+        if (generation === this.generation && this.child === child) {
+          this.log.record("mpv-start-failed");
+          this.recovery.failure();
+        }
       });
-      child.on("exit", () => {
-        if (generation === this.generation) {
+      child.on("exit", (exitCode) => {
+        if (generation === this.generation && this.child === child) {
           this.transport?.close();
           this.transport = null;
           this.ipc?.close();
           this.host?.destroy();
-          this.emit({ status: "error", error: "MPV closed. Retry playback." });
+          this.log.record("mpv-exit", { exitCode });
+          this.recovery.failure();
         }
       });
       const ipc = (this.ipc = new MpvIPC());
@@ -205,17 +254,19 @@ export class Player {
         return;
       }
       ipc.onEvent = (event) => {
-        if (generation !== this.generation) return;
+        if (generation !== this.generation || ipc !== this.ipc) return;
         if (event.event === "file-loaded") {
+          this.recovery.playing();
+          this.log.record("file-loaded", { transport: this.state.transport, fallback: this.forceHls });
           this.emit({ status: "playing", error: null });
           this.transport?.setPaused(this.state.pause);
         }
-        if (event.event === "end-file")
-          this.emit({
-            status: event.reason === "error" ? "error" : "ended",
-            error:
-              event.reason === "error" ? "Playback ended unexpectedly. Retry to resolve a fresh stream URL." : null,
-          });
+        if (event.event === "end-file") {
+          this.log.record("mpv-end", { reason: event.reason, transport: this.state.transport });
+          // EOF can mean a broken HTTP connection, not an offline broadcaster.
+          // Only the fresh Kick channel response above may declare it offline.
+          if (shouldRecoverEnd(event)) this.recovery.failure();
+        }
         if (event.event === "property-change" && ["pause", "volume", "mute", "paused-for-cache"].includes(event.name))
           this.emit({ [event.name]: event.data });
         if (event.event === "property-change" && event.name === "osd-dimensions") {
@@ -269,7 +320,14 @@ export class Player {
     } catch (error) {
       if (generation === this.generation) {
         await this.dispose();
-        if (generation === this.generation) this.emit({ status: "error", error: error.message });
+        if (generation === this.generation) {
+          this.log.record("playback-open-failed", { code: error.code || "UNKNOWN", status: error.status });
+          if (["SESSION_EXPIRED", "CHALLENGE", "RATE_LIMIT"].includes(error.code)) {
+            this.recovery.halt();
+            this.emit({ status: "error", error: error.message });
+          } else if (recovering || error.code === "NETWORK") this.recovery.failure();
+          else this.emit({ status: "error", error: error.message });
+        }
       }
     }
   }
@@ -370,14 +428,9 @@ export class Player {
       case "quality": {
         const target = value === "auto" ? this.url : this.qualities.find((q) => q.id === value)?.url;
         if (!target) throw new Error("Invalid quality.");
-        const ipc = this.ipc;
-        const media = await this.mediaURL(
-          this.state.lowLatency && value === "auto" ? this.qualities[0]?.url || target : target,
-        );
-        if (ipc !== this.ipc) return;
-        await ipc.command(["loadfile", media, "replace"]);
-        this.emit({ quality: value });
-        return;
+        // Replace the playback generation before closing the old transport, so
+        // its delayed EOF cannot trigger recovery for the newly selected quality.
+        return this.open(this.slug, { quality: value, pause: this.state.pause });
       }
       default:
         throw new Error("Unknown player action.");
@@ -420,6 +473,7 @@ export class Player {
     }
   }
   async stop() {
+    this.recovery.halt();
     const generation = ++this.generation;
     this.slug = null;
     await this.dispose();

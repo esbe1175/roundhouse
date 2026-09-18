@@ -108,3 +108,103 @@ test("prefetch retries an unready edge, avoids replaying completed segments, pau
     stream.close();
   }
 });
+
+test(
+  "temporary playlist HTTP/network failures recover without dropping or replaying segments",
+  { timeout: 5000 },
+  async () => {
+    let playlists = 0;
+    const delivered = [],
+      diagnostics = [],
+      failures = [];
+    const stream = new LowLatencyStream({
+      onFailure: (error) => failures.push(error),
+      onDiagnostic: (details) => diagnostics.push(details),
+      fetchMedia: async (url) => {
+        if (url.endsWith("m3u8")) {
+          if (++playlists === 1) return new Response(manifest);
+          if (playlists === 2) return new Response("", { status: 503 });
+          if (playlists === 3) throw new TypeError("network unavailable");
+          return new Response(
+            "#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:12\n#EXTINF:2,\n12.ts\n#EXTINF:2,\n13.ts\n#EXT-X-ENDLIST\n",
+          );
+        }
+        const sequence = Number(new URL(url).pathname.match(/(\d+)\.ts/)[1]);
+        delivered.push(sequence);
+        return new Response(new Uint8Array([sequence]));
+      },
+    });
+    try {
+      const response = await fetch(await stream.start("https://media.example/live.m3u8"));
+      assert.deepEqual([...new Uint8Array(await response.arrayBuffer())], [12, 13]);
+      assert.deepEqual(delivered, [12, 13]);
+      assert.deepEqual(
+        diagnostics.map((d) => d.code),
+        ["HTTP", "NETWORK"],
+      );
+      assert.deepEqual(failures, []);
+    } finally {
+      stream.close();
+    }
+  },
+);
+
+test(
+  "expired media authorization surfaces a structured failure rather than a clean end",
+  { timeout: 5000 },
+  async () => {
+    let playlists = 0;
+    const failures = [];
+    const stream = new LowLatencyStream({
+      onFailure: (error) => failures.push(error),
+      fetchMedia: async (url) =>
+        url.endsWith("m3u8")
+          ? ++playlists === 1
+            ? new Response(manifest)
+            : new Response("", { status: 403 })
+          : new Response(new Uint8Array([12])),
+    });
+    try {
+      await fetch(await stream.start("https://media.example/live.m3u8"))
+        .then((r) => r.arrayBuffer())
+        .catch(() => {});
+      assert.equal(failures.length, 1);
+      assert.equal(failures[0].stage, "playlist");
+      assert.equal(failures[0].code, "HTTP");
+      assert.equal(failures[0].status, 403);
+      assert.equal(playlists, 2);
+    } finally {
+      stream.close();
+    }
+  },
+);
+
+test("a broken partial segment is not replayed into the same MPV connection", { timeout: 5000 }, async () => {
+  let segments = 0;
+  const failures = [];
+  const stream = new LowLatencyStream({
+    onFailure: (error) => failures.push(error),
+    fetchMedia: async (url) => {
+      if (url.endsWith("m3u8")) return new Response(manifest);
+      segments++;
+      return new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(new Uint8Array([0x47, 1, 2]));
+            setTimeout(() => controller.error(new Error("connection reset")), 20);
+          },
+        }),
+      );
+    },
+  });
+  try {
+    await fetch(await stream.start("https://media.example/live.m3u8"))
+      .then((r) => r.arrayBuffer())
+      .catch(() => {});
+    assert.equal(segments, 1);
+    assert.equal(failures[0].stage, "segment-body");
+    assert.equal(failures[0].code, "NETWORK");
+  } finally {
+    stream.close();
+  }
+});
