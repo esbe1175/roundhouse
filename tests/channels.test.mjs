@@ -1,6 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalizeChannel, followPage, collectFollows, parseQualities } from "../src/main/services/channels.mjs";
+import {
+  normalizeChannel,
+  followPage,
+  collectFollows,
+  resolveFollowDetails,
+  parseQualities,
+} from "../src/main/services/channels.mjs";
 
 test("normalizes live and offline channels without inventing viewer counts", () => {
   assert.equal(normalizeChannel({ slug: "offline", livestream: null }).live, false);
@@ -29,13 +35,103 @@ test("collects pages, deduplicates and sorts live channels before offline", asyn
   assert.equal(result[0].viewers, 5);
 });
 test("empty follows remain empty and malformed data is not mistaken for empty follows", () => {
-  assert.deepEqual(followPage([], "https://kick.com/api/v2/channels/followed").channels, []);
-  assert.throws(() => followPage({ message: "denied" }, "https://kick.com/api/v2/channels/followed"), /unfamiliar/);
+  const url = "https://kick.com/api/v2/channels/followed-page";
+  assert.deepEqual(followPage({ channels: [] }, url).channels, []);
+  assert.throws(() => followPage({ message: "denied" }, url), /unfamiliar/);
+  assert.throws(() => followPage({ channels: [{ unknown_slug: "missing" }] }, url), /unfamiliar/);
+  assert.throws(() => followPage({ channels: [{ slug: "valid" }, null] }, url), /unfamiliar/);
+});
+test("reads the observed Kick Following schema and follows nextCursor, including zero", async () => {
+  const calls = [];
+  const result = await collectFollows(async (url) => {
+    calls.push(url);
+    const cursor = new URL(url).searchParams.get("cursor");
+    return cursor === null
+      ? { nextCursor: 0, channels: [{ channel_slug: "offline", user_username: "Offline name", is_live: false }] }
+      : cursor === "0"
+        ? {
+            nextCursor: 5,
+            channels: [
+              {
+                channel_slug: "live",
+                user_username: "Live name",
+                is_live: true,
+                profile_picture: "https://example.com/avatar",
+                banner_picture: "https://example.com/banner",
+                category_name: "Games",
+                viewer_count: 100,
+                show_view_count: false,
+              },
+            ],
+          }
+        : {
+            channels: [
+              { channel_slug: "offline", is_live: false },
+              { channel_slug: "last", is_live: false },
+            ],
+          };
+  });
+  assert.deepEqual(
+    calls.map((url) => new URL(url).searchParams.get("cursor")),
+    [null, "0", "5"],
+  );
+  assert.ok(calls.every((url) => new URL(url).pathname === "/api/v2/channels/followed-page"));
+  assert.deepEqual(
+    result.map((c) => c.slug),
+    ["live", "last", "offline"],
+  );
+  assert.equal(result[0].name, "Live name");
+  assert.equal(result[0].viewers, null);
+  assert.equal(result[0].category, "Games");
+  assert.equal(result[0].avatar, "https://example.com/avatar");
+  assert.equal(result[0].thumbnail, "https://example.com/banner");
+  await assert.rejects(
+    collectFollows(async () => ({ channels: [], nextCursor: 5 })),
+    /pagination/,
+  );
+});
+test("resolves live metadata without requesting offline channels or exposing hidden viewer counts", async () => {
+  const channels = [
+    normalizeChannel({ channel_slug: "live", is_live: true, viewer_count: 50, show_view_count: false }),
+    normalizeChannel({ channel_slug: "offline", is_live: false }),
+  ];
+  const calls = [];
+  const result = await resolveFollowDetails(channels, async (url) => {
+    calls.push(url);
+    return {
+      slug: "live",
+      livestream: {
+        is_live: true,
+        session_title: "Current title",
+        viewer_count: 50,
+        thumbnail: { url: "https://example.com/live.jpg" },
+      },
+    };
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0], "https://kick.com/api/v2/channels/live/info");
+  assert.equal(result[0].title, "Current title");
+  assert.equal(result[0].thumbnail, "https://example.com/live.jpg");
+  assert.equal(result[0].viewers, null);
+  assert.equal(result[1].live, false);
+  await assert.rejects(
+    resolveFollowDetails(channels, async () => ({ slug: "unrelated" })),
+    /unfamiliar/,
+  );
+  await assert.rejects(
+    resolveFollowDetails(channels, async () => {
+      throw new Error("rate limited");
+    }),
+    /rate limited/,
+  );
 });
 test("rejects pagination leaving Kick and detects repeated pages", async () => {
   assert.throws(
     () =>
-      followPage({ data: [], next_page_url: "https://evil.test/steal" }, "https://kick.com/api/v2/channels/followed"),
+      followPage(
+        { data: [], next_page_url: "https://evil.test/steal" },
+        "https://kick.com/api/v2/channels/followed-page",
+      ),
     /Invalid/,
   );
   await assert.rejects(

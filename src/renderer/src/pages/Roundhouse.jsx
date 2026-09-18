@@ -17,11 +17,12 @@ const api = window.app.roundhouse;
 const emptyPlayer = { status: "idle", pause: false, volume: 80, mute: false, qualities: [], quality: "auto" };
 
 function ChannelCard({ channel, onOpen }) {
+  const [failedThumbnail, setFailedThumbnail] = useState(null);
   return (
     <button className={`rh-channel ${channel.live ? "" : "rh-offline"}`} onClick={() => onOpen(channel)}>
       <div className="rh-thumbnail">
-        {channel.thumbnail ? (
-          <img src={channel.thumbnail} alt="" loading="lazy" />
+        {channel.thumbnail && channel.thumbnail !== failedThumbnail ? (
+          <img src={channel.thumbnail} alt="" loading="lazy" onError={() => setFailedThumbnail(channel.thumbnail)} />
         ) : (
           <img className="rh-placeholder" src={Play} alt="" />
         )}

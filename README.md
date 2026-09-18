@@ -45,7 +45,7 @@ npm run build:win
 
 The existing `.env` names are preserved: `roundhouse_client_id`, `roundhouse_client_secret`, and `roundhouse_redirect_url`. These developer OAuth credentials are reserved for future integration; the shared website-session flow does not use them or run a callback listener. Never commit `.env`. Runtime cookies remain in Electron's persistent profile; Roundhouse does not copy them into JSON or `.env` files.
 
-Kick's followed-channel and playback website endpoints are undocumented. Unexpected responses produce an error instead of an empty successful result; failed overview refreshes retain the last successful list. HTTP 401, browser challenges, rate limits, and network failures receive separate handling. The implementation currently uses `/api/v2/channels/followed` and `/api/v2/channels/{slug}`; these need verification against the user's real signed-in account.
+Kick's followed-channel and playback website endpoints are undocumented. Unexpected responses produce an error instead of an empty successful result; failed overview refreshes retain the last successful list. HTTP 401, browser challenges, rate limits, and network failures receive separate handling. The overview uses `/api/v2/channels/followed-page` with `channel_slug`, `is_live`, and optional `nextCursor` pagination, verified against Kick's signed-in Following page. Live titles and current CDN thumbnails come from `/api/v2/channels/{slug}/info`; the older channel endpoint may return inaccessible thumbnail URLs. Unexpected rows fail explicitly instead of being silently discarded.
 
 ## Verification and remaining live checks
 

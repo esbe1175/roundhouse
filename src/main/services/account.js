@@ -1,5 +1,5 @@
 import { BrowserWindow, session } from "electron";
-import { collectFollows } from "./channels.mjs";
+import { collectFollows, resolveFollowDetails } from "./channels.mjs";
 import { openKickLogin } from "./login-page";
 
 export class KickAccount {
@@ -172,6 +172,7 @@ export class KickAccount {
   }
   async follows() {
     if (!this.user) throw new Error("Sign in to Kick first.");
-    return collectFollows(async (url) => (await this.request(url)).data);
+    const request = async (url) => (await this.request(url)).data;
+    return resolveFollowDetails(await collectFollows(request), request);
   }
 }

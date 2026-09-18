@@ -78,22 +78,20 @@ const assert = require("node:assert/strict");
         const pathname = new URL(url).pathname;
         let data;
         if (pathname === "/api/v1/user") data = { id: 123, username: "test_viewer" };
-        else if (pathname.includes("/followed")) {
+        else if (pathname === "/api/v2/channels/followed-page") {
           if (global.roundhouseTestRateLimit) return new Response("{}", { status: 429 });
           data = {
-            data: [
+            channels: [
               {
                 id: 1,
-                slug: "test_live",
-                user: { username: "Live channel" },
-                livestream: {
-                  is_live: true,
-                  session_title: "A test broadcast",
-                  viewer_count: 150,
-                  categories: [{ name: "Just Chatting" }],
-                },
+                channel_slug: "test_live",
+                user_username: "Live channel",
+                is_live: true,
+                viewer_count: 150,
+                show_view_count: true,
+                category_name: "Just Chatting",
               },
-              { id: 2, slug: "test_offline", user: { username: "Offline channel" }, livestream: null },
+              { id: 2, channel_slug: "test_offline", user_username: "Offline channel", is_live: false },
             ],
           };
         } else if (pathname.endsWith("/me")) data = { is_following: true, subscription: null, roles: [], banned: null };
@@ -101,14 +99,19 @@ const assert = require("node:assert/strict");
         else if (pathname.endsWith("/polls")) data = { status: { code: 404 } };
         else if (pathname.startsWith("/emotes") || pathname.includes("silenced-users")) data = [];
         else if (pathname === "/broadcasting/auth") return new Response("{}", { status: 403 });
-        else if (pathname.endsWith("/test_live"))
+        else if (pathname.endsWith("/test_live") || pathname.endsWith("/test_live/info"))
           data = {
             id: 1,
             user_id: 455,
             slug: "test_live",
             user: { id: 455, username: "Live channel" },
             chatroom: { id: 11 },
-            livestream: { is_live: true, id: 21, session_title: "A test broadcast" },
+            livestream: {
+              is_live: true,
+              id: 21,
+              session_title: "A test broadcast",
+              thumbnail: { url: "https://media.fixture/missing-thumbnail.webp" },
+            },
             playback_url: "https://media.fixture/master.m3u8",
             subscriber_badges: [],
           };
@@ -166,6 +169,8 @@ const assert = require("node:assert/strict");
     await expect.poll(() => completedLogin.isClosed(), { timeout: 15000 }).toBe(true);
     await expect(page.getByRole("heading", { name: "Following" })).toBeVisible({ timeout: 20000 });
     await expect(page.getByText("A test broadcast", { exact: true })).toBeVisible();
+    // A failed remote image must be replaced, not left as a broken image box.
+    await expect(page.locator(".rh-channel:not(.rh-offline) .rh-placeholder")).toBeVisible();
     await page.screenshot({ path: ".cache/overview.png" });
     await page.getByRole("textbox", { name: "Search followed channels" }).fill("not followed");
     await expect(page.getByText("No live channels match your search.")).toBeVisible();
