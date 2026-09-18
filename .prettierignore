@@ -1,0 +1,9 @@
+node_modules
+dist
+out
+.cache
+native/build
+resources/mpv
+package-lock.json
+.env
+.env.*

@@ -90,4 +90,9 @@ typings/
 
 # Electron-Forge
 out/
-package-lock.json
+
+.env.*
+!.env.example
+native/build/
+resources/mpv/
+artifacts/

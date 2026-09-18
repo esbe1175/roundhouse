@@ -1,9 +1,18 @@
 {
   "extends": "eslint:recommended",
   "parserOptions": {
+    "ecmaFeatures": { "jsx": true },
     "ecmaVersion": "latest",
     "sourceType": "module"
   },
+  "plugins": ["react"],
+  "rules": {
+    "react/jsx-uses-vars": "error",
+    "no-unused-vars": "warn",
+    "no-case-declarations": "off",
+    "no-empty": ["error", {"allowEmptyCatch": true}]
+  },
+  "ignorePatterns": ["out/", "dist/", "node_modules/", ".cache/", "resources/"],
   "env": {
     "browser": true,
     "es2021": true,

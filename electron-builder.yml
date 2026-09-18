@@ -1,44 +1,35 @@
-appId: com.kicktalk.app
-productName: kicktalk
+appId: local.roundhouse.app
+productName: Roundhouse
 directories:
-  buildResources: build
+  output: dist
+  buildResources: resources
 files:
-  - "!**/.vscode/*"
-  - "!src/*"
-  - "!electron.vite.config.{js,ts,mjs,cjs}"
-  - "!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}"
-  - "!{.env,.env.*,.npmrc,pnpm-lock.yaml}"
-asarUnpack:
-  - resources/**
+  - out/**
+  - package.json
+  - LICENSE
+  - THIRD_PARTY.md
+extraResources:
+  - from: resources/mpv
+    to: mpv
+  - from: native/build/Release/roundhouse_host.node
+    to: native/roundhouse_host.node
+  - from: resources/sounds
+    to: app.asar.unpacked/resources/sounds
+  - from: resources/icons
+    to: app.asar.unpacked/resources/icons
 win:
-  executableName: kicktalk
+  executableName: Roundhouse
   icon: resources/icons/win/KickTalk_v1.ico
-nsis:
-  artifactName: ${name}-${version}-setup.${ext}
-  shortcutName: ${productName}
-  uninstallDisplayName: ${productName}
-  createDesktopShortcut: always
-  deleteAppDataOnUninstall: false
-  oneClick: true
-  allowToChangeInstallationDirectory: false
-mac:
-  entitlementsInherit: build/entitlements.mac.plist
-  notarize: false
-dmg:
-  artifactName: ${name}-${version}.${ext}
-linux:
   target:
-    - AppImage
-    - snap
-    - deb
-  maintainer: electronjs.org
-  category: Utility
-appImage:
-  artifactName: ${name}-${version}.${ext}
+    - target: nsis
+      arch: [x64]
+nsis:
+  artifactName: Roundhouse-${version}-setup.${ext}
+  shortcutName: Roundhouse
+  uninstallDisplayName: Roundhouse
+  createDesktopShortcut: true
+  deleteAppDataOnUninstall: false
+  oneClick: false
+  allowToChangeInstallationDirectory: true
 npmRebuild: false
-publish:
-  provider: github
-  owner: KickTalkOrg
-  repo: KickTalk
-  private: false
-  releaseType: release
+publish: null
