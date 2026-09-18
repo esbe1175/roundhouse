@@ -26,9 +26,12 @@ export class Player {
       const x = (point.x - bounds.x) / zoom,
         y = (point.y - bounds.y) / zoom;
       const rect = this.rect;
-      const active = this.slug && this.window.isFocused() && !this.window.isMinimized() && rect;
+      // Hover should work while another app has focus, just like the chat pane.
+      // Only hidden/minimized windows should suppress the native-video controls.
+      const active = this.slug && this.window.isVisible() && !this.window.isMinimized() && rect;
       const inside = active && x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height;
-      const hoverTop = !!inside && y - rect.y < 64;
+      const overTitlebar = !!active && x >= 0 && x < bounds.width / zoom && y >= 0 && y < (rect.titlebarHeight || 0);
+      const hoverTop = overTitlebar || (!!inside && y - rect.y < 64);
       const hoverBottom = !!inside && rect.y + rect.height - y < 64;
       // The invisible divider sits over the first few pixels of chat. Native
       // video can swallow DOM mouseleave, so its hover must also use screen position.
@@ -158,6 +161,12 @@ export class Player {
       bottom = rect.overlayBottom ?? 0;
     if (![top, bottom].every((value) => Number.isFinite(value) && value >= 0 && value <= 256))
       throw new Error("Invalid player overlay bounds.");
+    if (
+      !Number.isFinite(rect.titlebarHeight ?? 0) ||
+      (rect.titlebarHeight ?? 0) < 0 ||
+      (rect.titlebarHeight ?? 0) > 256
+    )
+      throw new Error("Invalid title bar height.");
     if (!Number.isFinite(rect.dividerWidth ?? 0) || (rect.dividerWidth ?? 0) < 0 || (rect.dividerWidth ?? 0) > 16)
       throw new Error("Invalid divider width.");
     this.rect = rect;

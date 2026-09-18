@@ -72,8 +72,10 @@ const assert = require("node:assert/strict");
     await page.routeWebSocket(/wss:.*/, (socket) => socket.close());
     await app.evaluate(({ session, app, screen, BrowserWindow }) => {
       global.roundhouseTestCursor = { x: -10000, y: -10000 };
+      global.roundhouseTestFocused = true;
       screen.getCursorScreenPoint = () => global.roundhouseTestCursor;
-      BrowserWindow.getAllWindows().find((win) => win.webContents.getURL().startsWith("file:")).isFocused = () => true;
+      BrowserWindow.getAllWindows().find((win) => win.webContents.getURL().startsWith("file:")).isFocused = () =>
+        global.roundhouseTestFocused;
       const kick = session.fromPartition("persist:roundhouse-kick");
       kick.cookies.get = async () => [{ name: "session_token", value: "test-only" }];
       global.roundhouseTestRateLimit = false;
@@ -205,10 +207,20 @@ const assert = require("node:assert/strict");
           const origin = win.getContentBounds(),
             zoom = win.webContents.getZoomFactor();
           global.roundhouseTestCursor = {
-            x: origin.x + (edge === "divider" ? rect.x + rect.width + 3 : rect.x + rect.width / 2) * zoom,
+            x:
+              origin.x +
+              (edge === "titlebar"
+                ? origin.width / zoom - 200
+                : edge === "divider"
+                  ? rect.x + rect.width + 3
+                  : rect.x + rect.width / 2) *
+                zoom,
             y:
               origin.y +
-              (rect.y + (edge === "top" ? 10 : edge === "bottom" ? rect.height - 10 : rect.height / 2)) * zoom,
+              (edge === "titlebar"
+                ? 10
+                : rect.y + (edge === "top" ? 10 : edge === "bottom" ? rect.height - 10 : rect.height / 2)) *
+                zoom,
           };
         },
         { rect, edge },
@@ -216,7 +228,9 @@ const assert = require("node:assert/strict");
       if (edge === "divider")
         await expect(page.getByRole("separator", { name: "Chat width" })).toHaveClass(/is-active/);
       else if (edge !== "center")
-        await expect(page.locator(edge === "top" ? ".rh-watchbar" : ".rh-player-controls")).toHaveClass(/is-visible/);
+        await expect(
+          page.locator(edge === "top" || edge === "titlebar" ? ".rh-watchbar" : ".rh-player-controls"),
+        ).toHaveClass(/is-visible/);
     };
     await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeEnabled({ timeout: 15000 });
     // Repeat open/stop while an existing player is being torn down.
@@ -232,6 +246,9 @@ const assert = require("node:assert/strict");
     const videoBefore = await page.locator(".rh-surface").boundingBox();
     assert.equal(videoBefore.height, (await page.locator(".rh-watch").boundingBox()).height);
     assert.equal(videoBefore.x + videoBefore.width, (await page.locator(".rh-chat").boundingBox()).x);
+    await expect(page.locator(".rh-chat")).toHaveCSS("border-left-width", "1px");
+    const titleBorder = await page.locator(".rh-titlebar").evaluate((el) => getComputedStyle(el).borderBottomColor);
+    await expect(page.locator(".rh-chat")).toHaveCSS("border-left-color", titleBorder);
     await expect(page.locator(".rh-brand")).toHaveText("Roundhouse: Live channel - A test broadcast");
     await expect(page).toHaveTitle("Roundhouse: Live channel - A test broadcast");
     assert.equal(
@@ -293,6 +310,21 @@ const assert = require("node:assert/strict");
     await expect(input).toHaveText("");
     await page.keyboard.press("Enter");
     assert.equal(await app.evaluate(() => global.roundhouseTestMessages.length), 1);
+    // Background-window hover must expose both bars before any activating click.
+    await app.evaluate(() => {
+      global.roundhouseTestFocused = false;
+    });
+    await hoverEdge("titlebar");
+    await hoverEdge("center");
+    await expect(page.locator(".rh-watchbar")).not.toHaveClass(/is-visible/);
+    await hoverEdge("top");
+    await hoverEdge("bottom");
+    await page.getByRole("button", { name: "Mute", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Unmute", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Unmute", exact: true }).click();
+    await app.evaluate(() => {
+      global.roundhouseTestFocused = true;
+    });
     await hoverEdge("bottom");
     assert.deepEqual(await page.locator(".rh-surface").boundingBox(), videoBefore);
     await page.getByRole("button", { name: "Pause", exact: true }).click();

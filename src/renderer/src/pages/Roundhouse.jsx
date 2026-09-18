@@ -253,6 +253,7 @@ export default function Roundhouse() {
             overlayTop: topShown ? topBar.current?.getBoundingClientRect().height || 0 : 0,
             overlayBottom: bottomShown ? bottomBar.current?.getBoundingClientRect().height || 0 : 0,
             dividerWidth: fullscreen ? 0 : 7,
+            titlebarHeight: document.querySelector(".rh-titlebar")?.getBoundingClientRect().height || 0,
           })
           .catch(() => {});
       });
