@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useId, useMemo, useRef } from "react";
 import { GLOW_MORPH_MS, glowOpacity } from "../../../../utils/ambient-glow.mjs";
+import GlowDither from "./GlowDither";
 
 export default function AmbientGlow({ colors, intensity, falloff, frame, width, height }) {
+  const ditherId = `glow-dither-${useId().replaceAll(":", "")}`;
   // Player IPC repeats the palette alongside unrelated state changes. Only a
   // changed color field should start a new morph, not hover/volume updates.
   const palette = JSON.stringify(colors);
@@ -59,13 +61,22 @@ export default function AmbientGlow({ colors, intensity, falloff, frame, width, 
     return `url("${canvas.toDataURL()}")`;
   }, [falloff, frame?.left, frame?.right, frame?.top, frame?.bottom, width, height]);
   return (
-    <div
-      className="rh-ambient"
-      aria-hidden="true"
-      style={{ opacity: intensity / 100, maskImage: mask, maskSize: "100% 100%" }}
-    >
-      <canvas ref={base} width={96} height={64} />
-      <canvas ref={target} width={96} height={64} />
-    </div>
+    <>
+      <GlowDither id={ditherId} />
+      <div
+        className="rh-ambient-output"
+        aria-hidden="true"
+        style={{ filter: intensity > 0 ? `url(#${ditherId})` : "none" }}
+      >
+        <div
+          className="rh-ambient"
+          aria-hidden="true"
+          style={{ opacity: intensity / 100, maskImage: mask, maskSize: "100% 100%" }}
+        >
+          <canvas ref={base} width={96} height={64} />
+          <canvas ref={target} width={96} height={64} />
+        </div>
+      </div>
+    </>
   );
 }

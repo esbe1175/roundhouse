@@ -65,9 +65,11 @@ A live comparison on September 18, 2026 measured the prefetch route approximatel
 
 The **Roundhouse settings** gear in the video controls (or overview title bar) is separate from Chat settings. Ambient glow starts enabled and fills the video's black bars with soft stream colors. **Intensity** adjusts brightness; **Distance falloff** fades the glow away from the actual video edges. Higher values keep it closer to the picture; zero is **Unfaded**. Changes save automatically. **Reset to defaults** restores all three glow settings in one click without changing chat or playback preferences.
 
-Current defaults are enabled, 50% intensity and 35% falloff. First-run settings and reset both read [utils/glow-settings.mjs](utils/glow-settings.mjs), so release defaults can be tuned in one place.
+Current defaults are enabled, 15% intensity and 50% falloff. First-run settings and reset both read [utils/glow-settings.mjs](utils/glow-settings.mjs), so release defaults can be tuned in one place. Existing saved preferences are retained.
 
 MPV samples a 6×4 color palette every three seconds; only 24 RGB colors cross IPC. Chromium morphs between two tiny blurred color fields over 2.6 seconds, keeping the previous field visible throughout so there is no dip to black. A soft Gaussian falloff extends from the picture edges and rounds around corners, scaled to the video's dimensions for the same appearance at 1080p and 4K with matching aspect ratios. No second video decoder, image files, JavaScript animation loop or full-resolution image transfer is used. Sampling stops while paused, minimized, hidden, disabled, at zero intensity, or when there are no black bars. The native video rectangle retains its dimensions; its black bars are clipped to reveal the glow. Player menus cut out only their own rectangles, preserving the video alongside them.
+
+The glow also uses a fixed 128×128 monochrome dither tile to soften dark gradient bands. It adds/subtracts at most one 8-bit brightness level after intensity and falloff, using an SVG arithmetic filter. The tile is generated once and displayed at physical-pixel scale, including after moving between display scales. This adds a filter/compositing pass during color morphs, but no per-frame JavaScript, animated noise generation, extra stream samples or video decoder. Dithering stops with the glow and is bypassed at zero intensity.
 
 ## Development (PowerShell)
 

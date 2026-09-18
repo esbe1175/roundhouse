@@ -406,6 +406,7 @@ const assert = require("node:assert/strict");
     assert.deepEqual(morph.opacity, [0, 0.5, 1]);
     assert.equal(morph.baseOpacity, "1");
     assert.equal(morph.alpha, 255, "the old color field remains opaque throughout the morph");
+    await require("./glow-dither.cjs")({ app, page });
     await hoverEdge("bottom");
     await page.getByRole("button", { name: "Roundhouse settings", exact: true }).click();
     const ambientSetting = page.getByRole("menuitemcheckbox", { name: "Ambient glow", exact: true });
