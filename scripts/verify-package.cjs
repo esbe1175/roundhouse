@@ -4,7 +4,9 @@ const assert = require("node:assert/strict");
 const asar = require("@electron/asar");
 const archive = path.resolve("dist/win-unpacked/resources/app.asar");
 const files = asar.listPackage(archive);
-for (const name of ["LICENSE", "README.md", "THIRD_PARTY_NOTICES.md"])
+// License/third-party notices are extraResources, so builder excludes their
+// duplicate app.asar entries. Verify those readable copies below.
+for (const name of ["README.md"])
   assert.ok(
     files.some((file) => file === `/${name}` || file === `\\${name}`),
     `Missing packaged documentation: ${name}`,

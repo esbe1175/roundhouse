@@ -29,4 +29,3 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 [pac-proxy-agent]: https://github.com/TooTallNate/node-pac-proxy-agent
 [socks-proxy-agent]: https://github.com/TooTallNate/node-socks-proxy-agent
 [http.Agent]: https://nodejs.org/api/http.html#http_class_http_agent
-
