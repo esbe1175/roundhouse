@@ -1,6 +1,7 @@
 import { kickEmoteRegex, urlRegex, mentionRegex } from "../../../../utils/constants";
 import Emote from "../components/Cosmetics/Emote";
 import { parse } from "tldts";
+import { isZeroWidthEmote } from "../../../../utils/emote-layout.mjs";
 
 const messageContentCache = new Map();
 const MAX_MESSAGE_CACHE_SIZE = 800;
@@ -140,7 +141,7 @@ const getEmoteData = (emoteName, sevenTVEmotes, chatroomId) => {
     const emoteData = {
       id: emote.id,
       flags: emote.flags,
-      isZeroWidth: emote.flags !== 0,
+      isZeroWidth: isZeroWidthEmote(emote.flags),
       width: emote.file?.width || 28,
       height: emote.file?.height || 28,
       name: emote.name,

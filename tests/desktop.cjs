@@ -83,6 +83,13 @@ const assert = require("node:assert/strict");
         body: '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><circle cx="32" cy="32" r="30" fill="#53fc18"/></svg>',
       }),
     );
+    await page.route("https://cdn.7tv.app/emote/wide-fixture/**", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "image/svg+xml",
+        body: '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="32"><rect width="128" height="32" rx="4" fill="#53fc18"/></svg>',
+      }),
+    );
     await page.route("https://media.fixture/fresh-thumbnail.svg*", (route) =>
       route.fulfill({
         status: 200,
@@ -131,12 +138,13 @@ const assert = require("node:assert/strict");
         } else if (pathname.endsWith("/me")) data = { is_following: true, subscription: null, roles: [], banned: null };
         else if (pathname.endsWith("/messages")) {
           const sender = { id: 700, username: "FixtureViewer", identity: { color: "#53fc18", badges: [] } };
-          const messages = ["A fixture chat message", "[emote:123:TestSmile]"].map((content, i) => ({
+          const wideSender = { id: 701, username: "WideViewer", identity: { color: "#53fc18", badges: [] } };
+          const messages = ["A fixture chat message", "[emote:123:TestSmile]", "WideFixture WideFixture WideFixture"].map((content, i) => ({
             id: `fixture-${i}`,
             chatroom_id: pathname.includes("/1/") ? 11 : 12,
             type: "message",
             content,
-            sender,
+            sender: i === 2 ? wideSender : sender,
             metadata: "null",
             created_at: new Date().toISOString(),
           }));
@@ -198,7 +206,32 @@ const assert = require("node:assert/strict");
         return new Response(JSON.stringify(data), { status: 200, headers: { "content-type": "application/json" } });
       };
       const axios = process.getBuiltinModule("module").createRequire(app.getAppPath() + "/package.json")("axios");
-      axios.get = async () => ({ status: 404, data: {} });
+      axios.get = async (url) =>
+        String(url).includes("/emote-sets/global")
+          ? {
+              status: 200,
+              data: {
+                id: "global",
+                name: "Global",
+                emote_count: 1,
+                capacity: 1,
+                emotes: [
+                  {
+                    id: "wide-fixture",
+                    actor_id: null,
+                    flags: 2,
+                    name: "WideFixture",
+                    timestamp: Date.now(),
+                    data: {
+                      name: "WideFixture",
+                      owner: null,
+                      host: { files: [{ name: "1x.webp", width: 128, height: 32 }] },
+                    },
+                  },
+                ],
+              },
+            }
+          : { status: 404, data: {} };
       axios.post = async () => ({ status: 200, data: { data: { users: { userByConnection: null } } } });
       // Exercise the production Player with real MPV but a generated video source.
       // Replace fixture media URLs only at the IPC transport boundary.
@@ -321,6 +354,20 @@ const assert = require("node:assert/strict");
         ).toHaveClass(/is-visible/);
     };
     await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeEnabled({ timeout: 15000 });
+    const wideEmotes = page.locator('.chatroomEmoteWrapper:has(img[alt="WideFixture"])');
+    await expect(wideEmotes).toHaveCount(3);
+    assert.equal(
+      await wideEmotes.evaluateAll((elements) => {
+        const boxes = elements.map((element) => element.getBoundingClientRect());
+        return boxes.every((box) => Math.round(box.width) === 128) &&
+          boxes.every((box, index) =>
+            boxes.slice(index + 1).every(
+              (other) => box.right <= other.left || other.right <= box.left || box.bottom <= other.top || other.bottom <= box.top,
+            ),
+          );
+      }),
+      true,
+    );
     await expect(page.locator(".rh-runtime")).toHaveText(/1:02:\d{2}/);
     await expect(page.getByRole("button", { name: "Live", exact: true })).toHaveCount(0);
     await page.locator(".rh-surface").dispatchEvent("dblclick");

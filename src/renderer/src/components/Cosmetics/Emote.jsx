@@ -1,11 +1,20 @@
 import { memo, useCallback, useState, useMemo } from "react";
 import EmoteTooltip from "./EmoteTooltip";
+import { emoteDisplaySize } from "../../../../../utils/emote-layout.mjs";
 
 const Emote = memo(({ emote, overlaidEmotes = [], scale = 1, type }) => {
   const { id, name, width, height } = emote;
 
   const [showEmoteInfo, setShowEmoteInfo] = useState(false);
   const [mousePos, setMousePos] = useState({ x: null, y: null });
+  const [naturalSize, setNaturalSize] = useState(null);
+  const displaySize = useMemo(
+    () =>
+      type === "stv"
+        ? emoteDisplaySize(width, height, naturalSize?.width, naturalSize?.height, scale)
+        : { width: 32, height: 32 },
+    [height, naturalSize?.height, naturalSize?.width, scale, type, width],
+  );
 
   const emoteSrcSet = useCallback(
     (emote) => {
@@ -54,8 +63,8 @@ const Emote = memo(({ emote, overlaidEmotes = [], scale = 1, type }) => {
       <div
         className="chatroomEmoteWrapper"
         style={{
-          width: type === "stv" ? width : "32px",
-          height: type === "stv" ? height : "32px",
+          width: `${displaySize.width}px`,
+          height: `${displaySize.height}px`,
         }}>
         <div
           className="chatroomEmote"
@@ -70,6 +79,15 @@ const Emote = memo(({ emote, overlaidEmotes = [], scale = 1, type }) => {
             loading="lazy"
             fetchpriority="low"
             decoding="async"
+            onLoad={(event) => {
+              const image = event.currentTarget;
+              if (image.naturalWidth > 0 && image.naturalHeight > 0)
+                setNaturalSize((current) =>
+                  current?.width === image.naturalWidth && current?.height === image.naturalHeight
+                    ? current
+                    : { width: image.naturalWidth, height: image.naturalHeight },
+                );
+            }}
           />
         </div>
 
