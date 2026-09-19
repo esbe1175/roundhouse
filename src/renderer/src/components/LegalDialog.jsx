@@ -38,6 +38,34 @@ const sections = [
   },
 ];
 
+// The bundled notices use only headings, paragraphs, lists and inline emphasis.
+// Render that subset as React nodes so the source remains the attribution record.
+function noticeInline(text) {
+  return text.split(/(\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*|`[^`]+`)/g).map((part, index) => {
+    const link = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+    if (link) {
+      return /^https:\/\//.test(link[2]) ? (
+        <a key={index} href={link[2]} onClick={(event) => {
+          event.preventDefault();
+          void window.app.utils.openExternal(link[2]);
+        }}>{noticeInline(link[1])}</a>
+      ) : <span key={index}>{noticeInline(link[1])}</span>;
+    }
+    if (part.startsWith("**")) return <strong key={index}>{part.slice(2, -2)}</strong>;
+    if (part.startsWith("`")) return <code key={index}>{part.slice(1, -1)}</code>;
+    return part;
+  });
+}
+
+function Notices() {
+  return <div className="rh-legal-notices">{noticesText.trim().split(/\r?\n\s*\r?\n/).map((block, index) => {
+    if (block.startsWith("# ")) return <h3 key={index}>{noticeInline(block.slice(2))}</h3>;
+    if (block.startsWith("## ")) return <h4 key={index}>{noticeInline(block.slice(3))}</h4>;
+    if (block.startsWith("- ")) return <ul key={index}>{block.split(/\r?\n/).map((line, item) => <li key={item}>{noticeInline(line.slice(2))}</li>)}</ul>;
+    return <p key={index}>{noticeInline(block)}</p>;
+  })}</div>;
+}
+
 export default function LegalDialog({ open, onClose }) {
   const [section, setSection] = useState("credits");
   useEffect(() => {
@@ -63,14 +91,13 @@ export default function LegalDialog({ open, onClose }) {
         <div className="rh-legal-body">
           <nav aria-label="Legal information">
             {sections.map((item) => (
-              <button key={item.id} className={section === item.id ? "active" : ""} onClick={() => setSection(item.id)}>
+              <button key={item.id} aria-current={section === item.id ? "page" : undefined} className={section === item.id ? "active" : ""} onClick={() => setSection(item.id)}>
                 {item.label}
               </button>
             ))}
           </nav>
-          <article>
-            <h3>{active.label}</h3>
-            <pre>{active.text}</pre>
+          <article key={active.id} tabIndex={0} aria-label={active.label}>
+            {active.id === "credits" ? <Notices /> : <><h3>{active.label}</h3><pre>{active.text}</pre></>}
           </article>
         </div>
       </section>

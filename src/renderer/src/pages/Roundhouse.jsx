@@ -876,8 +876,9 @@ export default function Roundhouse() {
               <div className="rh-mini-surface rh-surface" ref={surface}>
                 {miniControlsShown && (
                   <div className="rh-mini-controls rh-native-overlay">
-                    <button className="rh-mini-return" onClick={() => void open(selected)}>
-                      Return to {selected.name}
+                    <button className="rh-mini-return" aria-label={`Return to ${selected.name}`} title={`Return to ${selected.name}`} onClick={() => void open(selected)}>
+                      <PlaybackIcon kind="expand" />
+                      <span>{selected.name}</span>
                     </button>
                     <button
                       className="rh-mini-close"

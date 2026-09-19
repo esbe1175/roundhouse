@@ -286,8 +286,13 @@ const assert = require("node:assert/strict");
     );
     await page.getByRole("button", { name: "About Roundhouse" }).click();
     await expect(page.getByRole("dialog", { name: "About Roundhouse" })).toContainText("KickTalk");
+    await expect(page.getByRole("heading", { name: "KickTalk", exact: true })).toBeVisible();
+    await expect(page.locator(".rh-legal-notices strong").first()).toHaveText("Dark");
+    await page.screenshot({ path: ".cache/credits-menu.png" });
     await page.getByRole("button", { name: "Roundhouse license" }).click();
     await expect(page.getByRole("dialog", { name: "About Roundhouse" })).toContainText("GNU GENERAL PUBLIC LICENSE");
+    await page.getByRole("button", { name: "Credits & notices" }).click();
+    await expect(page.getByRole("heading", { name: "Third-party notices and acknowledgements" })).toBeVisible();
     await page.getByRole("button", { name: "Close About Roundhouse" }).click();
     await expect(page.getByText("A test broadcast", { exact: true })).toBeVisible();
     await expect(page.locator('.rh-titlebar button[aria-label="Settings"]')).toHaveCount(0);
@@ -702,6 +707,7 @@ const assert = require("node:assert/strict");
     await expect(miniSurface).toHaveCSS("border-top-width", "0px");
     await hoverEdge("top");
     await expect(page.getByRole("button", { name: "Return to Live channel" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Return to Live channel" })).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     await page.screenshot({ path: ".cache/mini-player-hover.png" });
     await expect
       .poll(() => app.evaluate(() => global.roundhouseTestChildren.filter((child) => child.exitCode === null).length))

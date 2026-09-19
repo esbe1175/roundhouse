@@ -4,10 +4,10 @@ A personal Windows stream viewer built from KickTalk: your followed channels, an
 
 ## Fresh clone: one setup command
 
-**Supported target: Windows 10/11 x64.** Install the prerequisites below once, then run these commands in PowerShell. Replace the quoted repository placeholder with your Roundhouse remote URL or a local repository path; cloning KickTalk itself will not include Roundhouse's changes.
+**Supported target: Windows 10/11 x64.** Install the prerequisites below once, then run these commands in PowerShell.
 
 ```powershell
-git clone "YOUR_ROUNDHOUSE_REPOSITORY_URL" Roundhouse
+git clone https://github.com/esbe1175/roundhouse.git Roundhouse
 Set-Location Roundhouse
 npm run setup -- --run
 ```

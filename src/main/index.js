@@ -10,7 +10,7 @@ installIPCGuard();
 
 const isDev = process.env.NODE_ENV === "development";
 const iconRoot = app.isPackaged ? join(process.resourcesPath, "app.asar.unpacked/resources/icons") : join(__dirname, "../../resources/icons");
-const iconPath = process.platform === "win32" ? join(iconRoot, "win/KickTalk_v1.ico") : join(iconRoot, "KickTalk_v1.png");
+const iconPath = process.platform === "win32" ? join(iconRoot, "win/Roundhouse.ico") : join(iconRoot, "Roundhouse.png");
 
 
 

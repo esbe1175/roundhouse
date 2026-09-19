@@ -30,7 +30,7 @@ extraResources:
     to: app.asar.unpacked/resources/icons
 win:
   executableName: Roundhouse
-  icon: resources/icons/win/KickTalk_v1.ico
+  icon: resources/icons/win/Roundhouse.ico
   target:
     - target: nsis
       arch: [x64]

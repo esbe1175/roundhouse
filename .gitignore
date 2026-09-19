@@ -5,6 +5,7 @@
 settings.json
 user-data/
 profiles/
+Agents.md
 *.pfx
 *.p12
 *.key

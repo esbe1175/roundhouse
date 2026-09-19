@@ -26,7 +26,7 @@ for (const file of [
   "mpv/mpv.exe",
   "native/roundhouse_host.node",
   "player/ambient.lua",
-  "app.asar.unpacked/resources/icons/win/KickTalk_v1.ico",
+  "app.asar.unpacked/resources/icons/win/Roundhouse.ico",
   "licenses/Roundhouse-GPL-3.0.txt",
   "licenses/THIRD_PARTY_NOTICES.md",
   "licenses/upstream/Inter-OFL-1.1.txt",
