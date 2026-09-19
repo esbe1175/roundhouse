@@ -72,7 +72,10 @@ export class Player {
       const active = this.slug && this.window.isVisible() && !this.window.isMinimized() && rect;
       const inside = active && x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height;
       const overTitlebar = !!active && x >= 0 && x < bounds.width / zoom && y >= 0 && y < (rect.titlebarHeight || 0);
-      const hoverTop = overTitlebar || (!!inside && y - rect.y < Math.max(64, rect.height * 0.15));
+      const topHoverHeight = rect?.miniPlayer
+        ? Math.min(40, rect.height * 0.25)
+        : Math.max(64, (rect?.height || 0) * 0.15);
+      const hoverTop = overTitlebar || (!!inside && y - rect.y < topHoverHeight);
       const hoverBottom =
         !!inside && rect.y + rect.height - y < Math.max(64, rect.height * 0.15, rect.overlayBottom || 0);
       // The invisible divider sits over the first few pixels of chat. Native
@@ -86,9 +89,10 @@ export class Player {
       if (
         hoverTop !== this.state.hoverTop ||
         hoverBottom !== this.state.hoverBottom ||
-        hoverDivider !== this.state.hoverDivider
+        hoverDivider !== this.state.hoverDivider ||
+        !!inside !== this.state.hoverInside
       )
-        this.emit({ hoverTop, hoverBottom, hoverDivider });
+        this.emit({ hoverTop, hoverBottom, hoverDivider, hoverInside: !!inside });
       const videoClicks = this.host?.consumeClicks?.() || 0;
       const videoDoubleClicks = this.host?.consumeDoubleClicks?.() || 0;
       if (videoClicks || videoDoubleClicks)
@@ -181,6 +185,7 @@ export class Player {
       ambientColors: null,
       hoverTop: false,
       hoverBottom: false,
+      hoverInside: false,
       fallback: forceHls,
       cacheAhead: 0,
     });
@@ -372,6 +377,8 @@ export class Player {
       throw new Error("Invalid divider width.");
     if (!Number.isFinite(rect.borderRadius ?? 0) || (rect.borderRadius ?? 0) < 0 || (rect.borderRadius ?? 0) > 64)
       throw new Error("Invalid player corner radius.");
+    if (rect.miniPlayer !== undefined && typeof rect.miniPlayer !== "boolean")
+      throw new Error("Invalid mini player state.");
     const holes = rect.overlayRects ?? [];
     if (
       !Array.isArray(holes) ||

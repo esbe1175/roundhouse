@@ -698,52 +698,58 @@
   right: 24px;
   bottom: 24px;
   width: clamp(280px, 25vw, 420px);
-  filter: drop-shadow(0 12px 24px #0009);
   animation: rh-mini-arrive 240ms ease-out;
 }
 .rh-mini-surface {
   width: 100%;
   aspect-ratio: 16 / 9;
-  border: 1px solid var(--border-secondary);
   border-radius: 8px;
   background: #000;
+  box-shadow: 0 0 0 1px var(--border-primary), 0 12px 28px #000a;
 }
-.rh-mini-heading {
+.rh-mini-controls {
   position: absolute;
   z-index: 2;
   top: 0;
   left: 0;
   right: 0;
-  min-height: 38px;
-  padding: 6px 7px 6px 10px;
+  height: 34px;
+  padding: 3px 5px 3px 10px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  background: linear-gradient(#111e, #1118, transparent);
-  > div {
-    min-width: 0;
-    flex: 1;
-  }
-  strong,
-  span {
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  strong { font-size: 12px; }
-  span { color: #bbb; font-size: 11px; }
-  button {
-    display: grid;
-    place-items: center;
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    border: 0;
-    border-radius: 4px;
-    background: #111a;
-    svg { width: 16px; height: 16px; }
-  }
+  gap: 4px;
+  border-bottom: 1px solid var(--border-primary);
+  background: var(--navbar-bg);
+}
+.rh-mini-return {
+  min-width: 0;
+  flex: 1;
+  height: 28px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-primary);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  &:hover { color: var(--text-accent); }
+}
+.rh-mini-close {
+  display: grid;
+  place-items: center;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  background: transparent;
+  &:hover { color: var(--text-primary); background: var(--bg-active); }
+  svg { width: 16px; height: 16px; }
 }
 .rh-mini-state {
   position: absolute;
@@ -752,12 +758,6 @@
   place-items: center;
   color: var(--text-secondary);
   background: #000;
-}
-.rh-mini-return {
-  width: 100%;
-  margin-top: 6px;
-  border: 1px solid var(--border-secondary);
-  background: var(--navbar-bg);
 }
 @keyframes rh-mini-arrive {
   from { opacity: 0; transform: translate(-10vw, -8vh) scale(1.35); }

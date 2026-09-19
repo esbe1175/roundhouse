@@ -136,6 +136,7 @@ export default function Roundhouse() {
     bottomBar = useRef(null);
   const topShown = !!player.hoverTop || topFocus,
     bottomShown = !!player.hoverBottom || bottomFocus || qualityOpen || appSettingsOpen || bottomPressed;
+  const miniControlsShown = minimized && !!player.hoverInside && !!player.hoverTop;
   useEffect(() => {
     let frame;
     // Keep the toolbar present through click dispatch, including a fast click
@@ -388,7 +389,10 @@ export default function Roundhouse() {
             overlayBottom: minimized ? 0 : bottomHeight,
             overlayRects,
             dividerWidth: minimized || videoFullscreen ? 0 : 7,
-            titlebarHeight: document.querySelector(".rh-titlebar")?.getBoundingClientRect().height || 0,
+            miniPlayer: minimized,
+            titlebarHeight: minimized
+              ? 0
+              : document.querySelector(".rh-titlebar")?.getBoundingClientRect().height || 0,
             borderRadius: minimized ? 8 : 0,
           })
           .catch(() => {});
@@ -422,7 +426,7 @@ export default function Roundhouse() {
       mutation.disconnect();
       window.removeEventListener("resize", sync);
     };
-  }, [selected, minimized, fullscreen, videoFullscreen, player.status, topShown, bottomShown]);
+  }, [selected, minimized, fullscreen, videoFullscreen, player.status, topShown, bottomShown, miniControlsShown]);
 
   useEffect(() => {
     const keys = (event) => {
@@ -870,22 +874,25 @@ export default function Roundhouse() {
           {selected && minimized && (
             <section className="rh-mini-player" aria-label={`${selected.name} mini player`}>
               <div className="rh-mini-surface rh-surface" ref={surface}>
-                <div className="rh-mini-heading rh-native-overlay">
-                  <div>
-                    <strong>{selected.name}</strong>
-                    <span>{selected.title}</span>
+                {miniControlsShown && (
+                  <div className="rh-mini-controls rh-native-overlay">
+                    <button className="rh-mini-return" onClick={() => void open(selected)}>
+                      Return to {selected.name}
+                    </button>
+                    <button
+                      className="rh-mini-close"
+                      aria-label="Close mini player"
+                      title="Close mini player"
+                      onClick={() => void stopPlayback()}
+                    >
+                      <PlaybackIcon kind="close" />
+                    </button>
                   </div>
-                  <button aria-label="Close mini player" title="Close mini player" onClick={() => void stopPlayback()}>
-                    <PlaybackIcon kind="close" />
-                  </button>
-                </div>
+                )}
                 {!["playing", "loading", "reconnecting"].includes(player.status) && (
                   <div className="rh-mini-state">{player.status === "offline" ? "Offline" : "Playback interrupted"}</div>
                 )}
               </div>
-              <button className="rh-mini-return" onClick={() => void open(selected)}>
-                Return to {selected.name}
-              </button>
             </section>
           )}
         </main>

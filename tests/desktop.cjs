@@ -359,10 +359,14 @@ const assert = require("node:assert/strict");
       );
       if (edge === "divider")
         await expect(page.getByRole("separator", { name: "Chat width" })).toHaveClass(/is-active/);
-      else if (edge !== "center")
-        await expect(
-          page.locator(edge === "top" || edge === "titlebar" ? ".rh-watchbar" : ".rh-player-controls"),
-        ).toHaveClass(/is-visible/);
+      else if (edge !== "center") {
+        const mini = page.locator(".rh-mini-player");
+        if ((edge === "top" || edge === "titlebar") && (await mini.count())) {
+          await expect(page.locator(".rh-mini-controls")).toBeVisible();
+        } else {
+          await expect(page.locator(edge === "top" || edge === "titlebar" ? ".rh-watchbar" : ".rh-player-controls")).toBeVisible();
+        }
+      }
     };
     await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeEnabled({ timeout: 15000 });
     const wideEmotes = page.locator('.chatroomEmoteWrapper:has(img[alt="WideFixture"])');
@@ -686,11 +690,27 @@ const assert = require("node:assert/strict");
     assert.equal((await page.locator(".rh-surface").boundingBox()).height, videoBefore.height);
     const beforeMiniPlayer = await app.evaluate(() => global.roundhouseTestChildren.length);
     await page.getByRole("button", { name: "Following", exact: true }).click();
-    await expect(page.getByLabel("Live channel mini player")).toBeVisible();
+    const miniPlayer = page.getByLabel("Live channel mini player");
+    await expect(miniPlayer).toBeVisible();
+    await miniPlayer.evaluate((element) => Promise.all(element.getAnimations().map((animation) => animation.finished)));
     await expect(page.getByRole("heading", { name: "Following" })).toBeVisible();
+    await hoverEdge("center");
+    await expect(page.locator(".rh-mini-controls")).toHaveCount(0);
+    const miniSurface = page.locator(".rh-mini-surface");
+    const miniBox = await miniSurface.boundingBox();
+    assert.ok(Math.abs(miniBox.width / miniBox.height - 16 / 9) < 0.01);
+    await expect(miniSurface).toHaveCSS("border-top-width", "0px");
+    await hoverEdge("top");
+    await expect(page.getByRole("button", { name: "Return to Live channel" })).toBeVisible();
+    await page.screenshot({ path: ".cache/mini-player-hover.png" });
     await expect
       .poll(() => app.evaluate(() => global.roundhouseTestChildren.filter((child) => child.exitCode === null).length))
       .toBe(1);
+    await page.getByRole("button", { name: "Return to Live channel" }).click();
+    await expect(page.getByRole("button", { name: /^(Play|Pause)$/ })).toBeEnabled();
+    assert.equal(await app.evaluate(() => global.roundhouseTestChildren.length), beforeMiniPlayer);
+    await hoverEdge("top");
+    await page.getByRole("button", { name: "Following", exact: true }).click();
     await page.locator(".rh-channel:not(.rh-offline)").click();
     await expect(page.getByRole("button", { name: /^(Play|Pause)$/ })).toBeEnabled();
     assert.equal(await app.evaluate(() => global.roundhouseTestChildren.length), beforeMiniPlayer);
