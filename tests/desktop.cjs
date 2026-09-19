@@ -273,6 +273,17 @@ const assert = require("node:assert/strict");
     });
     await expect.poll(() => completedLogin.isClosed(), { timeout: 15000 }).toBe(true);
     await expect(page.getByRole("heading", { name: "Following" })).toBeVisible({ timeout: 20000 });
+    const accountBox = await page.locator(".rh-account").boundingBox();
+    const windowControlsBox = await page.locator(".rh-window-controls").boundingBox();
+    const signOutBox = await page.getByRole("button", { name: "Sign out" }).boundingBox();
+    const aboutBox = await page.getByRole("button", { name: "About Roundhouse" }).boundingBox();
+    assert.equal(Math.round(windowControlsBox.x - accountBox.x - accountBox.width), 14);
+    assert.equal(aboutBox.width, signOutBox.width);
+    assert.equal(aboutBox.height, signOutBox.height);
+    await expect(page.getByRole("button", { name: "About Roundhouse" })).toHaveCSS(
+      "background-color",
+      "rgba(0, 0, 0, 0)",
+    );
     await page.getByRole("button", { name: "About Roundhouse" }).click();
     await expect(page.getByRole("dialog", { name: "About Roundhouse" })).toContainText("KickTalk");
     await page.getByRole("button", { name: "Roundhouse license" }).click();

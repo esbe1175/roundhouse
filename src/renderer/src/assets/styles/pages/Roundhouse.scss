@@ -55,28 +55,6 @@
   border-bottom: 1px solid var(--border-primary);
   -webkit-app-region: drag;
 }
-.rh-title-help {
-  -webkit-app-region: no-drag;
-  display: grid;
-  place-items: center;
-  flex: 0 0 36px;
-  width: 36px;
-  height: 32px;
-  margin-left: 6px;
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
-  color: var(--text-secondary);
-  background: transparent;
-  &:hover {
-    color: var(--text-primary);
-    background: var(--bg-active);
-  }
-  svg {
-    width: 18px;
-    height: 18px;
-  }
-}
 .rh-brand {
   min-width: 0;
   overflow: hidden;

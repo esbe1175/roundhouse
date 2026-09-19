@@ -12,6 +12,7 @@ import User from "../assets/icons/user-fill.svg?asset";
 import Play from "../assets/icons/play-fill.svg?asset";
 import CaretDown from "../assets/icons/caret-down-fill.svg?asset";
 import CaretRight from "../assets/icons/caret-right-fill.svg?asset";
+import Question from "../assets/icons/question-bold.svg?asset";
 import PlaybackIcon from "../components/PlaybackIcon";
 import AmbientGlow from "../components/AmbientGlow";
 import RoundhouseSettings from "../components/RoundhouseSettings";
@@ -470,16 +471,11 @@ export default function Roundhouse() {
               <button title="Sign out" aria-label="Sign out" onClick={() => window.app.logout()}>
                 <img src={SignOut} alt="" />
               </button>
+              <button title="About Roundhouse" aria-label="About Roundhouse" onClick={() => setLegalOpen(true)}>
+                <img src={Question} alt="" />
+              </button>
             </div>
           )}
-          <button
-            className="rh-title-help"
-            title="About Roundhouse"
-            aria-label="About Roundhouse"
-            onClick={() => setLegalOpen(true)}
-          >
-            <PlaybackIcon kind="help" />
-          </button>
           <div className="rh-window-controls">
             <button aria-label="Minimize" onClick={() => window.app.minimize()}>
               <img src={Minus} alt="" />

@@ -31,13 +31,6 @@ export default function PlaybackIcon({ kind }) {
         </>
       )}
       {kind === "back" && <path d="m15 18-6-6 6-6M9 12h11" />}
-      {kind === "help" && (
-        <>
-          <circle cx="12" cy="12" r="9" />
-          <path d="M9.7 9a2.5 2.5 0 1 1 3.3 2.4c-.7.3-1 .8-1 1.6" />
-          <path d="M12 17h.01" />
-        </>
-      )}
       {kind === "close" && <path d="m6 6 12 12M18 6 6 18" />}
       {kind === "live" && <circle cx="12" cy="12" r="4" fill="currentColor" stroke="none" />}
     </svg>
