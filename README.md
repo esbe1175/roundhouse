@@ -2,6 +2,18 @@
 
 A personal Windows stream viewer built from KickTalk: your followed channels, an embedded MPV player, and KickTalk chat in one resizable window.
 
+## Screenshots
+
+**Player and chat** — watch a livestream alongside KickTalk's integrated chat.
+
+![Roundhouse playing Odablock's livestream with chat and playback controls](docs/screenshots/player-and-chat.png)
+
+**Following and mini player** — browse live and offline followed channels while the stream continues in the corner.
+
+![Roundhouse followed-channel overview with Odablock's livestream in the mini player](docs/screenshots/following-and-mini-player.png)
+
+The stream shown in both screenshots is from **Odablock's livestream during his September 2026 subathon**. Stream content belongs to Odablock and its respective rights holders; screenshots illustrate Roundhouse and do not imply endorsement. Captured September 19, 2026.
+
 ## Fresh clone: one setup command
 
 **Supported target: Windows 10/11 x64.** Install the prerequisites below once, then run these commands in PowerShell.
