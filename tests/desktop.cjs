@@ -174,6 +174,7 @@ const assert = require("node:assert/strict");
             livestream: {
               is_live: true,
               id: 21,
+              created_at: new Date(Date.now() - 3723000).toISOString(),
               session_title: "A test broadcast",
               thumbnail: {
                 url: global.roundhouseTestThumbnailVersion
@@ -239,6 +240,11 @@ const assert = require("node:assert/strict");
     });
     await expect.poll(() => completedLogin.isClosed(), { timeout: 15000 }).toBe(true);
     await expect(page.getByRole("heading", { name: "Following" })).toBeVisible({ timeout: 20000 });
+    await page.getByRole("button", { name: "About Roundhouse" }).click();
+    await expect(page.getByRole("dialog", { name: "About Roundhouse" })).toContainText("KickTalk");
+    await page.getByRole("button", { name: "Roundhouse license" }).click();
+    await expect(page.getByRole("dialog", { name: "About Roundhouse" })).toContainText("GNU GENERAL PUBLIC LICENSE");
+    await page.getByRole("button", { name: "Close About Roundhouse" }).click();
     await expect(page.getByText("A test broadcast", { exact: true })).toBeVisible();
     await expect(page.locator('.rh-titlebar button[aria-label="Settings"]')).toHaveCount(0);
     // A failed remote image must be replaced, not left as a broken image box.
@@ -280,7 +286,7 @@ const assert = require("node:assert/strict");
     });
     await page.getByRole("button", { name: "Refresh", exact: true }).click();
     await expect(page.getByRole("alert")).toHaveCount(0);
-    await page.getByRole("button", { name: /Live channel/ }).click();
+    await page.locator(".rh-channel:not(.rh-offline)").click();
     const hoverEdge = async (edge) => {
       const rect = await page.locator(".rh-surface").boundingBox();
       await app.evaluate(
@@ -315,6 +321,13 @@ const assert = require("node:assert/strict");
         ).toHaveClass(/is-visible/);
     };
     await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeEnabled({ timeout: 15000 });
+    await expect(page.locator(".rh-runtime")).toHaveText(/1:02:\d{2}/);
+    await expect(page.getByRole("button", { name: "Live", exact: true })).toHaveCount(0);
+    await page.locator(".rh-surface").dispatchEvent("dblclick");
+    await expect(page.locator(".rh-playback-feedback")).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "Play", exact: true })).toBeEnabled();
+    await page.locator(".rh-surface").dispatchEvent("dblclick");
+    await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeEnabled();
     // Repeat open/stop while an existing player is being torn down.
     await page.evaluate(async () => {
       await Promise.all([
@@ -573,7 +586,7 @@ const assert = require("node:assert/strict");
     await hoverEdge("center");
     await expect(page.locator(".rh-player-controls")).not.toHaveClass(/is-visible/);
     // Keyboard focus reveals controls even with the pointer in the video center.
-    await page.getByRole("button", { name: "← Following" }).focus();
+    await page.getByRole("button", { name: "Following", exact: true }).focus();
     await page.keyboard.press("Tab");
     await expect(page.getByRole("button", { name: "Play", exact: true })).toBeFocused();
     await expect(page.locator(".rh-player-controls")).toHaveClass(/is-visible/);
@@ -613,10 +626,17 @@ const assert = require("node:assert/strict");
     assert.equal(await app.evaluate(() => global.roundhouseTestChildren.length), beforeCinema);
     await hoverEdge("top");
     assert.equal((await page.locator(".rh-surface").boundingBox()).height, videoBefore.height);
-    await page.getByRole("button", { name: "← Following" }).click();
+    const beforeMiniPlayer = await app.evaluate(() => global.roundhouseTestChildren.length);
+    await page.getByRole("button", { name: "Following", exact: true }).click();
+    await expect(page.getByLabel("Live channel mini player")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Following" })).toBeVisible();
     await expect
-      .poll(() => app.evaluate(() => global.roundhouseTestChildren.every((child) => child.exitCode !== null)))
-      .toBe(true);
+      .poll(() => app.evaluate(() => global.roundhouseTestChildren.filter((child) => child.exitCode === null).length))
+      .toBe(1);
+    await page.locator(".rh-channel:not(.rh-offline)").click();
+    await expect(page.getByRole("button", { name: /^(Play|Pause)$/ })).toBeEnabled();
+    assert.equal(await app.evaluate(() => global.roundhouseTestChildren.length), beforeMiniPlayer);
+    await page.getByRole("button", { name: "Following", exact: true }).click();
     await page.locator("summary").click();
     await page.getByRole("button", { name: /Offline channel/ }).click();
     await expect(page.getByRole("heading", { name: "This channel is offline" })).toBeVisible();
@@ -657,7 +677,7 @@ const assert = require("node:assert/strict");
     await page.getByRole("button", { name: "Cinema", exact: true }).click();
     await expect(page.locator(".rh-titlebar")).toHaveCount(0);
     await hoverEdge("top");
-    await page.getByRole("button", { name: "← Following" }).click();
+    await page.getByRole("button", { name: "Following", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Following" })).toBeVisible();
     await expect(page.locator(".rh-titlebar")).toBeVisible();
     await expect(page).toHaveTitle("Roundhouse");
@@ -676,7 +696,7 @@ const assert = require("node:assert/strict");
     assert.equal(untrusted, "undefined");
     assert.deepEqual(errors, []);
     console.log(
-      "PASS: welcome, login dialog, session handoff, private bridge, follows, search, stale results, real embedded MPV with synthetic video, full-height video, edge hover and keyboard overlays, invisible divider hover/drag/cleanup, window title, compact chat header, Enter sends to fixture and Shift+Enter adds newline, emote insertion, narrow composer, pause, quality, process cleanup, offline chat, fullscreen, Back cleanup, isolated remote page.",
+      "PASS: welcome, login dialog, legal notices, session handoff, private bridge, follows, search, stale results, real embedded MPV with synthetic video, full-height video, edge hover and keyboard overlays, invisible divider hover/drag/cleanup, window title, compact chat header, Enter sends to fixture and Shift+Enter adds newline, emote insertion, narrow composer, pause, quality, seamless mini player, offline chat, fullscreen, Back cleanup, isolated remote page.",
     );
   } finally {
     await app.close();

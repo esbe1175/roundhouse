@@ -6,6 +6,7 @@ export function normalizeChannel(item) {
   if (typeof slug !== "string" || !/^[a-zA-Z0-9_-]+$/.test(slug)) return null;
   const isLive = channel.is_live ?? live?.is_live ?? !!live;
   const thumbnail = live?.thumbnail ?? channel.thumbnail ?? channel.banner_picture;
+  const startedAt = live?.created_at ?? live?.started_at ?? live?.start_time ?? null;
   return {
     id: channel.id,
     slug,
@@ -19,6 +20,7 @@ export function normalizeChannel(item) {
         ? null
         : (live?.viewer_count ?? live?.viewers ?? channel.viewer_count ?? null),
     thumbnail: typeof thumbnail === "string" ? thumbnail : thumbnail?.url || thumbnail?.src || null,
+    startedAt: typeof startedAt === "string" && Number.isFinite(Date.parse(startedAt)) ? startedAt : null,
   };
 }
 

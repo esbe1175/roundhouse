@@ -39,6 +39,9 @@ app.whenReady().then(async () => {
     assert.equal(host.geometry(550, 100).contains, true, "video above menu must remain visible");
     assert.equal(host.geometry().width, fullGeometry.width);
     assert.equal(host.geometry().height, fullGeometry.height);
+    host.bounds(20, 30, 640, 360, true, 0, 0, 0, 0, 1, 1, [], 12);
+    assert.equal(host.geometry(0, 0).contains, false, "rounded mini player hides square corners");
+    assert.equal(host.geometry(320, 180).contains, true, "rounded mini player retains its video center");
     host.bounds(20, 30, 640, 360, true, 0, 0);
     assert.equal(host.geometry(550, 200).contains, true, "closing menu restores its video region");
     const pipe = `\\\\.\\pipe\\roundhouse-test-${process.pid}`;

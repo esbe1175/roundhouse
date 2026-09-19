@@ -145,6 +145,14 @@
       display: flex;
       gap: 4px;
     }
+    .rh-rule-arrow {
+      display: block;
+      width: 14px;
+      height: 14px;
+    }
+    .rh-rule-arrow-up {
+      transform: rotate(180deg);
+    }
   }
   .rh-filter-pattern {
     display: grid;

@@ -11,9 +11,11 @@ import SignOut from "../assets/icons/sign-out-bold.svg?asset";
 import User from "../assets/icons/user-fill.svg?asset";
 import Play from "../assets/icons/play-fill.svg?asset";
 import CaretDown from "../assets/icons/caret-down-fill.svg?asset";
+import CaretRight from "../assets/icons/caret-right-fill.svg?asset";
 import PlaybackIcon from "../components/PlaybackIcon";
 import AmbientGlow from "../components/AmbientGlow";
 import RoundhouseSettings from "../components/RoundhouseSettings";
+import LegalDialog from "../components/LegalDialog";
 import { GLOW_DEFAULTS } from "../../../../utils/glow-settings.mjs";
 import { Slider } from "../components/Shared/Slider";
 import { Switch } from "../components/Shared/Switch";
@@ -29,6 +31,14 @@ import "../assets/styles/pages/Roundhouse.scss";
 
 const api = window.app.roundhouse;
 const emptyPlayer = { status: "idle", pause: false, volume: 80, mute: false, qualities: [], quality: "auto" };
+
+function formatRuntime(startedAt, now) {
+  const seconds = Math.max(0, Math.floor((now - Date.parse(startedAt)) / 1000));
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainder = seconds % 60;
+  return `${hours ? `${hours}:` : ""}${String(minutes).padStart(hours ? 2 : 1, "0")}:${String(remainder).padStart(2, "0")}`;
+}
 
 function ChannelCard({ channel, onOpen }) {
   const [failedThumbnail, setFailedThumbnail] = useState(null);
@@ -86,7 +96,9 @@ export default function Roundhouse() {
     [player, setPlayer] = useState(emptyPlayer),
     [fullscreen, setFullscreen] = useState(false),
     [cinema, setCinema] = useState(false),
-    [mentions, setMentions] = useState(false);
+    [mentions, setMentions] = useState(false),
+    [minimized, setMinimized] = useState(false),
+    [legalOpen, setLegalOpen] = useState(false);
   const videoFullscreen = fullscreen && !cinema;
   const changeView = (mode) => {
     setCinema(mode === "cinema");
@@ -102,6 +114,8 @@ export default function Roundhouse() {
   const [bottomPressed, setBottomPressed] = useState(false);
   const [draggingDivider, setDraggingDivider] = useState(false);
   const [chatTools, setChatTools] = useState(null);
+  const [clock, setClock] = useState(Date.now());
+  const [playbackFeedback, setPlaybackFeedback] = useState(null);
   const dividerDrag = useRef(null);
   const streamData = useChatStore((state) => state.chatrooms.find((chat) => chat.id === room)?.streamerData);
   const windowTitle = selected
@@ -110,6 +124,13 @@ export default function Roundhouse() {
   useEffect(() => {
     document.title = windowTitle;
   }, [windowTitle]);
+  useEffect(() => {
+    if (!selected) return undefined;
+    const tick = () => setClock(Date.now());
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [selected]);
   const topBar = useRef(null),
     bottomBar = useRef(null);
   const topShown = !!player.hoverTop || topFocus,
@@ -148,7 +169,7 @@ export default function Roundhouse() {
     setRoom(null);
     setMentions(false);
   }, []);
-  const back = useCallback(async () => {
+  const stopPlayback = useCallback(async () => {
     setTopFocus(false);
     setBottomFocus(false);
     setQualityOpen(false);
@@ -156,11 +177,27 @@ export default function Roundhouse() {
     generation.current++;
     selectedRef.current = null;
     setSelected(null);
+    setMinimized(false);
     setChatError("");
     clearChat();
     await api.stop();
     await api.fullscreen(false);
   }, [clearChat]);
+  const back = useCallback(async () => {
+    if (!["playing", "loading", "reconnecting"].includes(player.status)) {
+      await stopPlayback();
+      return;
+    }
+    setTopFocus(false);
+    setBottomFocus(false);
+    setQualityOpen(false);
+    setDraggingDivider(false);
+    generation.current++;
+    setMinimized(true);
+    setChatError("");
+    clearChat();
+    await api.fullscreen(false);
+  }, [clearChat, player.status, stopPlayback]);
   useEffect(() => {
     api.ready().then((state) => {
       setAccount(state.user);
@@ -176,7 +213,7 @@ export default function Roundhouse() {
       if (state.user) {
         window.location.reload();
       } else {
-        void back();
+        void stopPlayback();
         setAccount(null);
         setChannels([]);
         setError(state.error || "");
@@ -190,7 +227,7 @@ export default function Roundhouse() {
       cleanAccount();
       window.removeEventListener("resize", resize);
     };
-  }, [back]);
+  }, [stopPlayback]);
 
   const refresh = useCallback(async () => {
     if (refreshLock.current) return;
@@ -209,7 +246,7 @@ export default function Roundhouse() {
     }
   }, []);
   useEffect(() => {
-    if (!account || selected) return;
+    if (!account || (selected && !minimized)) return;
     void refresh();
     const timer = setInterval(() => {
       if (!document.hidden) void refresh();
@@ -218,7 +255,7 @@ export default function Roundhouse() {
       if (overview.current) overview.current.scrollTop = scroll.current;
     });
     return () => clearInterval(timer);
-  }, [account, selected, refresh]);
+  }, [account, selected, minimized, refresh]);
 
   const login = async () => {
     setLoginBusy(true);
@@ -233,17 +270,7 @@ export default function Roundhouse() {
       setLoginBusy(false);
     }
   };
-  const open = async (channel) => {
-    setTopFocus(false);
-    setBottomFocus(false);
-    const current = ++generation.current;
-    scroll.current = overview.current?.scrollTop || 0;
-    clearChat();
-    setChatError("");
-    setSelected(channel);
-    selectedRef.current = channel;
-    setPlayer({ ...emptyPlayer, status: "loading" });
-    void api.open(channel.slug).catch((err) => setError(err.message));
+  const connectChat = async (channel, current) => {
     try {
       const chat = await useChatStore.getState().addChatroom(channel.slug);
       if (current !== generation.current) {
@@ -257,6 +284,23 @@ export default function Roundhouse() {
     } catch (err) {
       setChatError(err.message);
     }
+  };
+  const open = async (channel) => {
+    setTopFocus(false);
+    setBottomFocus(false);
+    const current = ++generation.current;
+    scroll.current = overview.current?.scrollTop || scroll.current;
+    clearChat();
+    setChatError("");
+    const resume = selectedRef.current?.slug === channel.slug && player.status !== "idle";
+    setSelected(channel);
+    selectedRef.current = channel;
+    setMinimized(false);
+    if (!resume) {
+      setPlayer((previous) => ({ ...previous, status: "loading" }));
+      void api.open(channel.slug).catch((err) => setError(err.message));
+    }
+    await connectChat(channel, current);
   };
   const control = async (action, value) => {
     try {
@@ -274,10 +318,26 @@ export default function Roundhouse() {
     onFalloff: (value) => void control("ambientFalloff", value),
     onReset: () => void control("resetGlow"),
   };
+  const togglePauseWithFeedback = () => {
+    const nextPaused = !player.pause;
+    setPlaybackFeedback(nextPaused ? "pause" : "play");
+    void control("pause");
+  };
+
+  useEffect(() => {
+    if (!selected || !player.videoClick || !minimized) return;
+    void open(selected);
+  }, [player.videoClick]);
+  useEffect(() => {
+    if (!selected || !player.videoDoubleClick || minimized) return;
+    togglePauseWithFeedback();
+    const timer = setTimeout(() => setPlaybackFeedback(null), 650);
+    return () => clearTimeout(timer);
+  }, [player.videoDoubleClick]);
 
   useEffect(() => {
     if (!selected || !surface.current) return;
-    let raf;
+    let raf, transitionRaf;
     const sync = () => {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
@@ -294,10 +354,7 @@ export default function Roundhouse() {
         const covered = overlays.some((el) => {
           // Player menus use individual native cutouts; other dialogs hide the
           // surface until they close.
-          if (
-            el.matches(".rh-quality-menu, .rh-settings-menu") ||
-            el.querySelector(".rh-quality-menu, .rh-settings-menu")
-          )
+          if (el.matches(".rh-native-overlay") || el.querySelector(".rh-native-overlay"))
             return false;
           const r = el.getBoundingClientRect();
           return (
@@ -309,7 +366,7 @@ export default function Roundhouse() {
             r.bottom > rect.top
           );
         });
-        const overlayRects = [...document.querySelectorAll(".rh-quality-menu, .rh-settings-menu")]
+        const overlayRects = [...document.querySelectorAll(".rh-native-overlay")]
           .map((el) => (el.closest("[data-radix-popper-content-wrapper]") || el).getBoundingClientRect())
           .filter((r) => r.left < rect.right && r.right > rect.left && r.top < rect.bottom && r.bottom > rect.top)
           .map((r) => ({
@@ -326,11 +383,12 @@ export default function Roundhouse() {
             width: rect.width,
             height: rect.height,
             visible: !covered && ["playing", "loading"].includes(player.status),
-            overlayTop: topShown ? topBar.current?.getBoundingClientRect().height || 0 : 0,
-            overlayBottom: bottomHeight,
+            overlayTop: minimized ? 0 : topShown ? topBar.current?.getBoundingClientRect().height || 0 : 0,
+            overlayBottom: minimized ? 0 : bottomHeight,
             overlayRects,
-            dividerWidth: videoFullscreen ? 0 : 7,
+            dividerWidth: minimized || videoFullscreen ? 0 : 7,
             titlebarHeight: document.querySelector(".rh-titlebar")?.getBoundingClientRect().height || 0,
+            borderRadius: minimized ? 8 : 0,
           })
           .catch(() => {});
       });
@@ -348,17 +406,26 @@ export default function Roundhouse() {
     });
     window.addEventListener("resize", sync);
     sync();
+    if (minimized) {
+      const started = performance.now();
+      const followTransition = (now) => {
+        sync();
+        if (now - started < 300) transitionRaf = requestAnimationFrame(followTransition);
+      };
+      transitionRaf = requestAnimationFrame(followTransition);
+    }
     return () => {
       cancelAnimationFrame(raf);
+      cancelAnimationFrame(transitionRaf);
       resize.disconnect();
       mutation.disconnect();
       window.removeEventListener("resize", sync);
     };
-  }, [selected, fullscreen, videoFullscreen, player.status, topShown, bottomShown]);
+  }, [selected, minimized, fullscreen, videoFullscreen, player.status, topShown, bottomShown]);
 
   useEffect(() => {
     const keys = (event) => {
-      if (!selected || event.defaultPrevented) return;
+      if (!selected || minimized || event.defaultPrevented) return;
       if (event.key === "Escape" && fullscreen && !qualityOpen && !appSettingsOpen) {
         void api.fullscreen(false);
         return;
@@ -374,7 +441,7 @@ export default function Roundhouse() {
     };
     window.addEventListener("keydown", keys);
     return () => window.removeEventListener("keydown", keys);
-  }, [selected, fullscreen, videoFullscreen, qualityOpen, appSettingsOpen]);
+  }, [selected, minimized, fullscreen, videoFullscreen, qualityOpen, appSettingsOpen]);
   const resizeChat = (value) => {
     const next = Math.max(280, Math.min(value, window.innerWidth - 480));
     setWidth(next);
@@ -405,6 +472,14 @@ export default function Roundhouse() {
               </button>
             </div>
           )}
+          <button
+            className="rh-title-help"
+            title="About Roundhouse"
+            aria-label="About Roundhouse"
+            onClick={() => setLegalOpen(true)}
+          >
+            <PlaybackIcon kind="help" />
+          </button>
           <div className="rh-window-controls">
             <button aria-label="Minimize" onClick={() => window.app.minimize()}>
               <img src={Minus} alt="" />
@@ -418,6 +493,7 @@ export default function Roundhouse() {
           </div>
         </header>
       )}
+      <LegalDialog open={legalOpen} onClose={() => setLegalOpen(false)} />
       {!ready ? (
         <main className="rh-welcome">
           <p>Restoring your session…</p>
@@ -436,7 +512,7 @@ export default function Roundhouse() {
           )}
           <small>Your session stays on this computer.</small>
         </main>
-      ) : selected ? (
+      ) : selected && !minimized ? (
         <>
           {error && (
             <div className="rh-error" role="alert">
@@ -456,13 +532,16 @@ export default function Roundhouse() {
                   if (!event.currentTarget.contains(event.relatedTarget)) setTopFocus(false);
                 }}
               >
-                <button onClick={() => void back()}>← Following</button>
+                <button className="rh-following-button" onClick={() => void back()}>
+                  <PlaybackIcon kind="back" />
+                  Following
+                </button>
                 <div>
                   <strong>{selected.name}</strong>
                   <span>{selected.title}</span>
                 </div>
               </nav>
-              <div className="rh-surface" ref={surface}>
+              <div className="rh-surface" ref={surface} onDoubleClick={togglePauseWithFeedback}>
                 {player.ambientGlow && player.ambientColors && player.status === "playing" && (
                   <AmbientGlow
                     colors={player.ambientColors}
@@ -471,6 +550,11 @@ export default function Roundhouse() {
                     frame={player.videoFrame}
                     {...surfaceSize}
                   />
+                )}
+                {playbackFeedback && (
+                  <div className="rh-playback-feedback rh-native-overlay" aria-live="polite">
+                    <PlaybackIcon kind={playbackFeedback} />
+                  </div>
                 )}
                 {!["playing"].includes(player.status) && (
                   <div className="rh-player-message">
@@ -535,7 +619,17 @@ export default function Roundhouse() {
                   value={[player.volume ?? 80]}
                   onValueChange={([volume]) => void control("volume", volume)}
                 />
-                <button onClick={() => void control("live")}>● Live</button>
+                {player.startedAt && (
+                  <time className="rh-runtime" dateTime={player.startedAt} title="Stream runtime">
+                    {formatRuntime(player.startedAt, clock)}
+                  </time>
+                )}
+                {(player.pause || (player.cacheAhead || 0) > (player.lowLatency ? 3 : 10)) && (
+                  <button className="rh-live-control" onClick={() => void control("live")}>
+                    <PlaybackIcon kind="live" />
+                    Live
+                  </button>
+                )}
                 <span
                   className="rh-player-status"
                   title={
@@ -573,7 +667,7 @@ export default function Roundhouse() {
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent
-                    className="rh-quality-menu"
+                    className="rh-quality-menu rh-native-overlay"
                     side="top"
                     align="end"
                     aria-label="Video quality"
@@ -767,6 +861,7 @@ export default function Roundhouse() {
           {offline.length > 0 && (
             <details className="rh-offline-section">
               <summary>
+                <img className="rh-disclosure" src={CaretRight} alt="" />
                 Offline <span>{offline.length}</span>
               </summary>
               <div className="rh-grid">
@@ -775,6 +870,27 @@ export default function Roundhouse() {
                 ))}
               </div>
             </details>
+          )}
+          {selected && minimized && (
+            <section className="rh-mini-player" aria-label={`${selected.name} mini player`}>
+              <div className="rh-mini-surface rh-surface" ref={surface}>
+                <div className="rh-mini-heading rh-native-overlay">
+                  <div>
+                    <strong>{selected.name}</strong>
+                    <span>{selected.title}</span>
+                  </div>
+                  <button aria-label="Close mini player" title="Close mini player" onClick={() => void stopPlayback()}>
+                    <PlaybackIcon kind="close" />
+                  </button>
+                </div>
+                {!["playing", "loading", "reconnecting"].includes(player.status) && (
+                  <div className="rh-mini-state">{player.status === "offline" ? "Offline" : "Playback interrupted"}</div>
+                )}
+              </div>
+              <button className="rh-mini-return" onClick={() => void open(selected)}>
+                Return to {selected.name}
+              </button>
+            </section>
           )}
         </main>
       )}

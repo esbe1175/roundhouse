@@ -25,6 +25,7 @@ export class Player {
       ambientGlow: store.get("ambientGlow"),
       ambientIntensity: store.get("ambientIntensity"),
       ambientFalloff: store.get("ambientFalloff"),
+      cacheAhead: 0,
     };
     this.generation = 0;
     this.log = new PlaybackLog(() => join(app.getPath("userData"), "logs"));
@@ -71,8 +72,9 @@ export class Player {
       const active = this.slug && this.window.isVisible() && !this.window.isMinimized() && rect;
       const inside = active && x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height;
       const overTitlebar = !!active && x >= 0 && x < bounds.width / zoom && y >= 0 && y < (rect.titlebarHeight || 0);
-      const hoverTop = overTitlebar || (!!inside && y - rect.y < 64);
-      const hoverBottom = !!inside && rect.y + rect.height - y < Math.max(64, rect.overlayBottom || 0);
+      const hoverTop = overTitlebar || (!!inside && y - rect.y < Math.max(64, rect.height * 0.15));
+      const hoverBottom =
+        !!inside && rect.y + rect.height - y < Math.max(64, rect.height * 0.15, rect.overlayBottom || 0);
       // The invisible divider sits over the first few pixels of chat. Native
       // video can swallow DOM mouseleave, so its hover must also use screen position.
       const hoverDivider =
@@ -87,6 +89,15 @@ export class Player {
         hoverDivider !== this.state.hoverDivider
       )
         this.emit({ hoverTop, hoverBottom, hoverDivider });
+      const videoClicks = this.host?.consumeClicks?.() || 0;
+      const videoDoubleClicks = this.host?.consumeDoubleClicks?.() || 0;
+      if (videoClicks || videoDoubleClicks)
+        this.emit({
+          ...(videoClicks ? { videoClick: (this.state.videoClick || 0) + videoClicks } : {}),
+          ...(videoDoubleClicks
+            ? { videoDoubleClick: (this.state.videoDoubleClick || 0) + videoDoubleClicks }
+            : {}),
+        });
     }, 100);
     this.window.once("closed", () => clearInterval(this.hoverTimer));
     this.ambientTimer = setInterval(() => this.sampleAmbient(), 3000);
@@ -171,6 +182,7 @@ export class Player {
       hoverTop: false,
       hoverBottom: false,
       fallback: forceHls,
+      cacheAhead: 0,
     });
     this.log.record(recovering ? "reconnect-start" : "playback-start", {
       generation,
@@ -191,6 +203,10 @@ export class Player {
         this.emit({ status: "offline" });
         return;
       }
+      const startedAt = data.livestream.created_at ?? data.livestream.started_at ?? data.livestream.start_time;
+      this.emit({
+        startedAt: typeof startedAt === "string" && Number.isFinite(Date.parse(startedAt)) ? startedAt : null,
+      });
       const url = new URL(data.playback_url);
       if (url.protocol !== "https:") throw new Error("Kick did not return an HTTPS playback URL.");
       this.url = url.href;
@@ -267,8 +283,14 @@ export class Player {
           // Only the fresh Kick channel response above may declare it offline.
           if (shouldRecoverEnd(event)) this.recovery.failure();
         }
-        if (event.event === "property-change" && ["pause", "volume", "mute", "paused-for-cache"].includes(event.name))
-          this.emit({ [event.name]: event.data });
+        if (
+          event.event === "property-change" &&
+          ["pause", "volume", "mute", "paused-for-cache", "demuxer-cache-duration"].includes(event.name)
+        )
+          this.emit({
+            [event.name === "demuxer-cache-duration" ? "cacheAhead" : event.name]:
+              event.name === "demuxer-cache-duration" ? Math.max(0, Number(event.data) || 0) : event.data,
+          });
         if (event.event === "property-change" && event.name === "osd-dimensions") {
           this.videoDimensions = event.data;
           const d = event.data;
@@ -306,6 +328,7 @@ export class Player {
         "volume",
         "mute",
         "paused-for-cache",
+        "demuxer-cache-duration",
         "osd-dimensions",
         "user-data/roundhouse/ambient",
       ].entries())
@@ -347,6 +370,8 @@ export class Player {
       throw new Error("Invalid title bar height.");
     if (!Number.isFinite(rect.dividerWidth ?? 0) || (rect.dividerWidth ?? 0) < 0 || (rect.dividerWidth ?? 0) > 16)
       throw new Error("Invalid divider width.");
+    if (!Number.isFinite(rect.borderRadius ?? 0) || (rect.borderRadius ?? 0) < 0 || (rect.borderRadius ?? 0) > 64)
+      throw new Error("Invalid player corner radius.");
     const holes = rect.overlayRects ?? [];
     if (
       !Array.isArray(holes) ||
@@ -378,6 +403,7 @@ export class Player {
       bottom * zoom,
       ...clip,
       holes.flatMap((hole) => [hole.x * zoom, hole.y * zoom, hole.width * zoom, hole.height * zoom]),
+      (rect.borderRadius || 0) * zoom,
     );
   }
   async control(action, value) {
@@ -477,6 +503,7 @@ export class Player {
     const generation = ++this.generation;
     this.slug = null;
     await this.dispose();
-    if (generation === this.generation) this.emit({ status: "idle", qualities: [], error: null });
+    if (generation === this.generation)
+      this.emit({ status: "idle", qualities: [], error: null, startedAt: null, cacheAhead: 0 });
   }
 }

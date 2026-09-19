@@ -13,11 +13,17 @@ test("normalizes live and offline channels without inventing viewer counts", () 
   const channel = normalizeChannel({
     slug: "live",
     user: { username: "Live" },
-    livestream: { is_live: true, thumbnail: { url: "https://example.com/image" }, categories: [{ name: "Games" }] },
+    livestream: {
+      is_live: true,
+      thumbnail: { url: "https://example.com/image" },
+      categories: [{ name: "Games" }],
+      created_at: "2026-09-19T10:00:00Z",
+    },
   });
   assert.equal(channel.live, true);
   assert.equal(channel.viewers, null);
   assert.equal(channel.category, "Games");
+  assert.equal(channel.startedAt, "2026-09-19T10:00:00Z");
   assert.equal(normalizeChannel({ slug: "../escape" }), null);
 });
 test("collects pages, deduplicates and sorts live channels before offline", async () => {

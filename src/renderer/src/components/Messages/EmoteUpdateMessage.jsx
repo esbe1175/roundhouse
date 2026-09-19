@@ -1,4 +1,5 @@
 import stvLogo from "../../assets/logos/stvLogo.svg?asset";
+import ArrowRight from "../../assets/icons/arrow-right-bold.svg?asset";
 
 const EmoteUpdateMessage = ({ message }) => {
   return (
@@ -65,7 +66,9 @@ const EmoteUpdateMessage = ({ message }) => {
                   <p className="emoteSetUpdateEmoteName">
                     <span>{e.oldName}</span>
                   </p>
-                  <span className="emoteSetUpdateEmoteNameSeparator">→</span>
+                  <span className="emoteSetUpdateEmoteNameSeparator">
+                    <img src={ArrowRight} alt="renamed to" />
+                  </span>
                   <p className="emoteSetUpdateEmoteName">
                     <span>{e.newName}</span>
                   </p>

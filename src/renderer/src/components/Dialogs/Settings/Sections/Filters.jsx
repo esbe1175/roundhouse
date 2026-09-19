@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Switch } from "../../../Shared/Switch";
 import { DEFAULTS } from "../../../../../../../utils/chat-filters.mjs";
 import { useFilterWorker } from "../../../../utils/useChatFilters";
+import CaretDown from "../../../../assets/icons/caret-down-bold.svg?asset";
 import "../../../../assets/styles/dialogs/Filters.scss";
 
 function Toggle({ title, description, checked, onChange }) {
@@ -233,14 +234,14 @@ export default function Filters({ settingsData, onChange }) {
                           disabled={index === 0}
                           onClick={() => move(index, -1)}
                         >
-                          ↑
+                          <img className="rh-rule-arrow rh-rule-arrow-up" src={CaretDown} alt="" />
                         </button>
                         <button
                           aria-label={`Move rule ${index + 1} down`}
                           disabled={index === rules.length - 1}
                           onClick={() => move(index, 1)}
                         >
-                          ↓
+                          <img className="rh-rule-arrow" src={CaretDown} alt="" />
                         </button>
                         <button
                           aria-label={`Delete rule ${index + 1}`}

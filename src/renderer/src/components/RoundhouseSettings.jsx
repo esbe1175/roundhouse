@@ -27,7 +27,7 @@ export default function RoundhouseSettings({
           <img src={Gear} width={18} height={18} alt="" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="rh-settings-menu" side="top" align="end" collisionPadding={8}>
+      <DropdownMenuContent className="rh-settings-menu rh-native-overlay" side="top" align="end" collisionPadding={8}>
         <DropdownMenuLabel>Roundhouse settings</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuCheckboxItem
